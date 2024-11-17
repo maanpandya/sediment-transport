@@ -2,8 +2,8 @@ using Plots
 
 create_gifs = false
 plot_separation_of_omega_equation_type = false
-create_frequency_jump_up_plot = true
-create_frequency_jump_down_plot = true
+create_frequency_jump_up_plot = false
+create_frequency_jump_down_plot = false
 
 function cut_lists(lst1, lst2)
     # Ensure both lists are of the same length
@@ -44,65 +44,72 @@ end
 #ω -> angular frequency of periodic driving force 
 #a -> amplitude of the steady-state response 
 
-α = 1.0
+α = 1
 β = 0.04
-δ = 0.1
+δ = [0.1, 0.2, 0.8, 2]
 γ = 1
 a = collect(range(0, 10, 100))
 
-a_plot_pos = [] #Contains the values of the steady-state response amplitude to be ploted for the positive ω formula
-a_plot_neg = [] #Contains the values of the steady-state response amplitude to be ploted for the negative ω formula
-ω_plot_pos = [] #Contains the values of the steady-state response driving angular frequency from the positive formula to be ploted
-ω_plot_neg = [] #Contains the values of the steady-state response driving angular frequency from the negative formula to be ploted
+ω_plot_list = []
+a_plot_list = []
 
-#Calculate ω from analytical solution
-for i in 1:length(a)
+for j in 1:length(δ)
 
-    discriminant = ((γ^2)/(a[i]^2)) - δ^2*α + ((δ^4)/(4)) - ((3*δ^2*β*a[i]^2)/(4))
+    local a_plot_pos = [] #Contains the values of the steady-state response amplitude to be ploted for the positive ω formula
+    local a_plot_neg = [] #Contains the values of the steady-state response amplitude to be ploted for the negative ω formula
+    local ω_plot_pos = [] #Contains the values of the steady-state response driving angular frequency from the positive formula to be ploted
+    local ω_plot_neg = [] #Contains the values of the steady-state response driving angular frequency from the negative formula to be ploted
 
-    #Make sure ω^2 is not complex
-    if discriminant > 0
+    #Calculate ω from analytical solution
+    for i in 1:length(a)
 
-        ω_1 = α - ((δ^2)/(2)) + ((3*β*a[i]^2)/(4)) + sqrt(discriminant) #Analytical solution 1
-        ω_2 = α - ((δ^2)/(2)) + ((3*β*a[i]^2)/(4)) - sqrt(discriminant) #Analytical solution 2
-    
-        #Only take positive/physical values of ω^2
-        if ω_1 >= 0
-            push!(a_plot_pos, a[i])
-            push!(ω_plot_pos, sqrt(ω_1))    
-        end
+        local discriminant = ((γ^2)/(a[i]^2)) - δ[j]^2*α + ((δ[j]^4)/(4)) - ((3*δ[j]^2*β*a[i]^2)/(4))
 
-        if ω_2 >= 0
-             push!(a_plot_neg, a[i])
-             push!(ω_plot_neg, sqrt(ω_2))    
+        #Make sure ω^2 is not complex
+        if discriminant > 0
+
+            local ω_1 = α - ((δ[j]^2)/(2)) + ((3*β*a[i]^2)/(4)) + sqrt(discriminant) #Analytical solution 1
+            local ω_2 = α - ((δ[j]^2)/(2)) + ((3*β*a[i]^2)/(4)) - sqrt(discriminant) #Analytical solution 2
+        
+            #Only take positive/physical values of ω^2
+            if ω_1 >= 0
+                push!(a_plot_pos, a[i])
+                push!(ω_plot_pos, sqrt(ω_1))    
+            end
+
+            if ω_2 >= 0
+                push!(a_plot_neg, a[i])
+                push!(ω_plot_neg, sqrt(ω_2))    
+            end
         end
     end
+
+    #Remove infinity values from the obtained lists
+    local indices_to_remove_neg = findall(x -> isinf(x), ω_plot_neg)
+    local indices_to_remove_pos = findall(x -> isinf(x), ω_plot_pos)
+
+    local ω_plot_neg = deleteat!(ω_plot_neg, indices_to_remove_neg)
+    local a_plot_neg = deleteat!(a_plot_neg, indices_to_remove_neg)
+    local ω_plot_pos = deleteat!(ω_plot_pos, indices_to_remove_pos)
+    local a_plot_pos = deleteat!(a_plot_pos, indices_to_remove_pos)
+
+    local ω_plot = vcat(ω_plot_neg, ω_plot_pos)
+    local a_plot = vcat(a_plot_neg, a_plot_pos)
+    push!(ω_plot_list, ω_plot)
+    push!(a_plot_list, a_plot)
 end
 
-#Remove infinity values from the obtained lists
+plot(xlim=(0, 3), ylim=(0, 9), title="Single Harmonic Duffing Frequency Response for Varying δ", size=(700, 600), titlepadding=100)
+for g in 1:length(a_plot_list)
+    scatter!(ω_plot_list[g], a_plot_list[g], label="δ = $(δ[g])", xlabel="ω", ylabel="(u^2 + v^2)^1/2")
+    #scatter!(ω_plot_pos, a_plot_list[g], color="orange", xlabel="ω", ylabel="(u^2 + v^2)^1/2", label="Positive")
+end
+savefig("C:\\Users\\LENOVO\\Desktop\\duffing_single_response_delta.png")
 
-indices_to_remove_neg = findall(x -> isinf(x), ω_plot_neg)
-indices_to_remove_pos = findall(x -> isinf(x), ω_plot_pos)
-
-ω_plot_neg = deleteat!(ω_plot_neg, indices_to_remove_neg)
-a_plot_neg = deleteat!(a_plot_neg, indices_to_remove_neg)
-ω_plot_pos = deleteat!(ω_plot_pos, indices_to_remove_pos)
-a_plot_pos = deleteat!(a_plot_pos, indices_to_remove_pos)
-
-
-#Sort the plot so that it is plotted with increasing and decreasing angular frequency depending on the formula used 
-#sorted_indices = sortperm(ω_plot)
-
-#Reorder both lists according to these indices
-#ω_sorted = ω_plot[sorted_indices]
-#a_sorted = a_plot[sorted_indices]
-
-#println(ω_sorted)
-#println(a_sorted)
-
+#=
 if plot_separation_of_omega_equation_type
-    plot(ω_plot_pos, a_plot_pos, xlim=(0, 3), ylim=(0, 8.5), label=false, color="red", title="Single Harmonic Duffing Frequency Response (positive formula)", size=(700, 600), titlepadding=100)
-    scatter!(ω_plot_pos, a_plot_pos, color="orange", label="Positive")
+    plot(ω_plot_pos, a_plot_pos, xlim=(0, 3), ylim=(0, 8.5), label=false, color="red", title="Single Harmonic Duffing Frequency Response", size=(700, 600), titlepadding=100)
+    scatter!(ω_plot_pos, a_plot_pos, color="orange", xlabel="ω", ylabel="(u^2 + v^2)^1/2", label="Positive")
     plot!(ω_plot_neg, a_plot_neg, color="dark green", label=false)
     scatter!(ω_plot_neg, a_plot_neg, color="green", label="Negative")
     savefig("C:\\Users\\LENOVO\\Desktop\\duffing_single_response.png")
@@ -172,3 +179,4 @@ if create_gifs
     gif(anim1, "C:\\Users\\LENOVO\\Desktop\\frequency_response_duffing_single_harmonic1.gif", fps=10)
     gif(anim2, "C:\\Users\\LENOVO\\Desktop\\frequency_response_duffing_single_harmonic2.gif", fps=10)
 end
+=#
