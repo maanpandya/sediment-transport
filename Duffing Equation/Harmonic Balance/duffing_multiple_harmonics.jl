@@ -1,8 +1,8 @@
 using HarmonicBalance
 
 n_cases = 3 #Defines the number of different driving frequencies to try
-n_harmonics = 2 #Defines the number of harmonics to use
-print_harmonic_eqs = false #Set to print or not the harmonic equations
+n_harmonics = 1 #Defines the number of harmonics to use
+print_harmonic_eqs = true #Set to print or not the harmonic equations
 
 #α -> linear stiffness coefficient
 #γ -> amplitude of periodic driving force

@@ -1,8 +1,13 @@
-for i in 1:2:5
-    println("Iteration $i")
+function find_drop_index(lst)
+    for i in 1:(length(lst) - 1)  # Iterate until second to last element
+        if lst[i] > lst[i + 1]   # Check if the next element is smaller
+            return i              # Return the index of the drop
+        end
+    end
+    return nothing  # Return nothing if no drop is found
 end
 
-lst = collect(1:12)
-print(lst)
-lst2 = filter(x -> x % 2 != 0, collect(1:21))
-print(lst2)
+# Example usage
+lst = [1, 3, 5, 4, 6, 8]
+index = find_drop_index(lst)
+println(index)  # Output: 3 (where 5 > 4)
