@@ -105,10 +105,10 @@ if plot_separation_of_omega_equation_type
     scatter!(ω_plot_pos, a_plot_pos, color="orange", label="Positive")
     plot!(ω_plot_neg, a_plot_neg, color="dark green", label=false)
     scatter!(ω_plot_neg, a_plot_neg, color="green", label="Negative")
-    savefig("C:\\Users\\LENOVO\\Desktop\\duffing_single_response.png")
+    # savefig("C:\\Users\\LENOVO\\Desktop\\duffing_single_response.png")
 end
 
-sorted_indices_neg = sortperm(ω_plot_neg)
+sorted_indices_neg = sortperm(ω_plot_neg) 
 ω_sorted_neg = ω_plot_neg[sorted_indices_neg]
 a_sorted_neg = a_plot_neg[sorted_indices_neg]
 
@@ -149,13 +149,13 @@ a_plot = vcat(a_down, a_up)
 if create_frequency_jump_up_plot
     plot(ω_up, a_up, xlim=(0, 3), ylim=(0, 8.5), label=false, color="red", title="Single Harmonic Duffing\n Frequency Response for Decreasing ω", size=(700, 600), titlepadding=100)
     scatter!(ω_up, a_up, color="dark red", label=false, xlabel="ω", ylabel="(u^2 + v^2)^1/2")
-    savefig("C:\\Users\\LENOVO\\Desktop\\duffing_single_response_jump_up.png")
+    # savefig("C:\\Users\\LENOVO\\Desktop\\duffing_single_response_jump_up.png")
 end
 
 if create_frequency_jump_down_plot
     plot(ω_down, a_down, xlim=(0, 3), ylim=(0, 8.5), label=false, color="green", title="Single Harmonic Duffing\n Frequency Response for Increasing ω", size=(700, 600), titlepadding=100)
     scatter!(ω_down, a_down, color="dark green", label=false, xlabel="ω", ylabel="(u^2 + v^2)^1/2")
-    savefig("C:\\Users\\LENOVO\\Desktop\\duffing_single_response_jump_down.png")
+    # savefig("C:\\Users\\LENOVO\\Desktop\\duffing_single_response_jump_down.png")
 end
 
 
@@ -169,6 +169,6 @@ if create_gifs
     end
 
     #Save as a GIF
-    gif(anim1, "C:\\Users\\LENOVO\\Desktop\\frequency_response_duffing_single_harmonic1.gif", fps=10)
-    gif(anim2, "C:\\Users\\LENOVO\\Desktop\\frequency_response_duffing_single_harmonic2.gif", fps=10)
+    # gif(anim1, "C:\\Users\\LENOVO\\Desktop\\frequency_response_duffing_single_harmonic1.gif", fps=10)
+    # gif(anim2, "C:\\Users\\LENOVO\\Desktop\\frequency_response_duffing_single_harmonic2.gif", fps=10)
 end
