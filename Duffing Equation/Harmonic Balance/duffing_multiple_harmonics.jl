@@ -1,7 +1,7 @@
 using HarmonicBalance
 
-n_cases = 100 #Defines the number of different driving frequencies to try
-harmonics = [1] #Defines the harmonic to use as an integer which multiplies the fundamental harmonic
+n_cases = 3 #Defines the number of different driving frequencies to try
+harmonics = [1, 3, 5, 7] #Defines the harmonic to use as an integer which multiplies the fundamental harmonic
 print_harmonic_eqs = true #Set to print or not the harmonic equations
 
 #α -> linear stiffness coefficient
@@ -15,7 +15,7 @@ print_harmonic_eqs = true #Set to print or not the harmonic equations
 diff_eq = DifferentialEquation(d(x,t,2) + α*x + β*x^3 + δ*d(x,t) ~ γ*cos(ω*t), x)
 
 fixed = (α => 1.0, β => 0.04, δ => 0.1, γ=>1)   #fixed parameters
-varied = ω => range(0.01, 3, n_cases)           #range of driving frequencies
+varied = ω => range(1, 3, n_cases)           #range of driving frequencies
 
 for i in 1:length(harmonics)
     add_harmonic!(diff_eq, x, [harmonics[i]*ω]) #add the ith-harmonic
@@ -66,8 +66,11 @@ println(sol_coeffs)
 
 
 
-#plot(result, "sqrt(u1^2 + v1^2)")
-#savefig("C:\\Users\\LENOVO\\Desktop\\duffing_multiple_response.png")
+p1 = plot(result, "sqrt(u1^2 + v1^2)", title="1st Harmonic",xlim=(0, 3), ylim=(0, 9), size=(700, 600), legend=false)
+p2 = plot(result, "sqrt(u2^2 + v2^2)", title="2nd Harmonic",xlim=(0, 3), ylim=(0, 9), size=(700, 600), legend=false)
+p3 = plot(result, "sqrt(u3^2 + v3^2)", title="3rd Harmonic", size=(700, 600))
+plot(p1, p2, p3)
+savefig("C:\\Users\\LENOVO\\Desktop\\duffing_multiple_response.png")
 
 #if plot_harmonic_coefficients
 #    plot(xlabel="ω", ylabel="u" title="Harmonic Coefficients", size=(700, 600), titlepadding=100)

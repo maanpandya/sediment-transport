@@ -1,4 +1,4 @@
-for g in 1:2:6
+for g in 1:2:8
     println(g)
 end
 
