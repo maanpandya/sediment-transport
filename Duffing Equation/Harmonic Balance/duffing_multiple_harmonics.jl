@@ -1,6 +1,6 @@
 using HarmonicBalance
 
-n_cases = 3 #Defines the number of different driving frequencies to try
+n_cases = 100 #Defines the number of different driving frequencies to try
 n_harmonics = 1 #Defines the number of harmonics to use
 print_harmonic_eqs = true #Set to print or not the harmonic equations
 
@@ -29,12 +29,12 @@ if print_harmonic_eqs
 end
 
 result = get_steady_states(harmonic_eq, varied, fixed)
-
+print(result)
 #Branch 1 always contains the real and stable solutions
-#stable_classification = classify_branch(result, "stable")
-#physical_classification = classify_branch(result, "physical")
-#println(stable_classification)
-#println(physical_classification)
+stable_classification = classify_branch(result, "stable")
+physical_classification = classify_branch(result, "physical")
+println(stable_classification)
+println(physical_classification)
 
 #sol = get_single_solution(result, branch=1, index=2)
 #println(sol)
@@ -58,5 +58,5 @@ for j in 1:n_cases
     end
     push!(sol_coeffs, single_sol_coeffs)
 end
-
 println(sol_coeffs)
+plot(result, "sqrt(u1^2 + v1^2)", title="1st Harmonic (Mass 1)", size=(700, 600), legend=false)
