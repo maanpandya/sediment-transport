@@ -10,15 +10,15 @@ function ansatz_definer(t, ω, harmonics)
 
     ansatz = zero(t)
     for i in 1:length(harmonics)
-        ansatz += c[i]*sin(harmonics[i]*ω*t) + c[i+1]*cos(harmonics[i]*ω*t)
+        ansatz += c[2*i-1]*sin(harmonics[i]*ω*t) + c[2*i]*cos(harmonics[i]*ω*t)
     end
     return ansatz, c 
 end
 
 #Example usage
-"""
+
 @variables t, ω
 ansatz, c = ansatz_definer(t, ω, [1, 3])
 println(ansatz)
 println(c)
-"""
+
