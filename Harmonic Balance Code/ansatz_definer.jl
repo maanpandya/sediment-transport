@@ -6,16 +6,19 @@ using Symbolics
 
 function ansatz_definer(t, ω, harmonics)
 
-    ansatz = 0
+    @variables c[1:2*length(harmonics)] #Define unknown coefficients for each harmonic term
+
+    ansatz = zero(t)
     for i in 1:length(harmonics)
-        ansatz = ansatz + sin(harmonics[i]*ω*t) + cos(harmonics[i]*ω*t)
+        ansatz += c[i]*sin(harmonics[i]*ω*t) + c[i+1]*cos(harmonics[i]*ω*t)
     end
-    return ansatz 
+    return ansatz, c 
 end
 
 #Example usage
 """
 @variables t, ω
-ansatz = ansatz_definer(t, ω, [1, 3])
+ansatz, c = ansatz_definer(t, ω, [1, 3])
 println(ansatz)
+println(c)
 """
