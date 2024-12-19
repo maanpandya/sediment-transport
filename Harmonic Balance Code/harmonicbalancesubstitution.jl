@@ -36,8 +36,8 @@ function power_derivatives(t, ansatz, powers, derivatives)
     # Power calculation
     r1 = @rule cos((~x))^2 => 0.5 + 0.5*cos(2*(~x))
     r2 = @rule sin((~x))^2 => 0.5 - 0.5*sin(2*(~x))
-    r3 = @rule 2.0*~a*~b*sin((~x))*cos((~x)) => ~a*~b*sin(2*(~x))
-    r4 = @rule 2.0*~a*~b*cos((~x))*sin((~x)) => ~a*~b*sin(2*(~x))
+    r3 = @rule 2.0*~a*~b*sin((~x))cos((~x)) => ~a~b*sin(2*(~x))
+    r4 = @rule 2.0*~a*~b*cos((~x))sin((~x)) => ~a~b*sin(2*(~x))
     r5 = @rule cos((~x))^3 => 0.75*cos((~x)) + 0.25*cos(3*(~x)) 
     r6 = @rule sin((~x))^3 => 0.75*sin((~x)) - 0.25*sin(3*(~x)) 
 
@@ -69,8 +69,8 @@ function harmonic_balance_substitution(ansatz, ode, powers_derivatives, harmonic
     # Rules for simplification to remove higher harmonics
     r1 = @rule cos((~x))^2 => 0.5 + 0.5*cos(2*(~x))
     r2 = @rule sin((~x))^2 => 0.5 - 0.5*sin(2*(~x))
-    r3 = @rule 2.0*~a*~b*sin((~x))*cos((~x)) => ~a*~b*sin(2*(~x))
-    r4 = @rule 2.0*~a*~b*cos((~x))*sin((~x)) => ~a*~b*sin(2*(~x))
+    r3 = @rule 2.0*~a*~b*sin((~x))cos((~x)) => ~a~b*sin(2*(~x))
+    r4 = @rule 2.0*~a*~b*cos((~x))sin((~x)) => ~a~b*sin(2*(~x))
     r5 = @rule cos((~x))^3 => 0.75*cos((~x)) + 0.25*cos(3*(~x)) 
     r6 = @rule sin((~x))^3 => 0.75*sin((~x)) - 0.25*sin(3*(~x)) 
 
@@ -124,21 +124,8 @@ harmonics_to_consider = [sin(ω * t), cos(ω * t)]
 polynomial_eqs = harmonic_balance_substitution(ansatz, duffing_eq, ansatz_derivatives, harmonics_to_consider, truncation_level)
 
 
-
-println("The results are:")
-println("Power of 2")
-println(ansatz_powers[1])
-println("Power of 3")
-println(ansatz_powers[2])
-println("First derivative")
-println(ansatz_derivatives[1])
-println("Second derivative")
-println(ansatz_derivatives[2])
-
-println("Polynomial Equations (FUNCTIONS):")
-println(polynomial_eqs)
-
-
-
-
-
+println("Polynomial equations:")
+for eq in polynomial_eqs
+    println(eq)
+    end
+end
