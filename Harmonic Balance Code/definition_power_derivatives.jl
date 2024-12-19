@@ -37,18 +37,25 @@ function power_derivatives(t, ansatz, powers, derivatives)
     end
 
     #Power calculation
-
+    
     r1 = @rule cos((~x))^2 => 0.5 + 0.5*cos(2*(~x))
     r2 = @rule sin((~x))^2 => 0.5 - 0.5*sin(2*(~x))
-    r3 = @rule 2.0*~a*~b*sin((~x))*cos((~x)) => ~a*~b*sin(2*(~x))
-    r4 = @rule 2.0*~a*~b*cos((~x))*sin((~x)) => ~a*~b*sin(2*(~x))
+    r3 = @rule sin((~x))cos((~x)) => sin(2*(~x))*0.5
+    r4 = @rule cos((~x))sin((~x)) => sin(2*(~x))*0.5
     r5 = @rule cos((~x))^3 => 0.75*cos((~x)) + 0.25*cos(3*(~x)) 
     r6 = @rule sin((~x))^3 => 0.75*sin((~x)) - 0.25*sin(3*(~x)) 
+    r7 = @rule (cos((~x))^2)*sin((~x)) => 0.25*sin((~x))+0.25*sin(3*(~x))
+    r8 = @rule sin((~x))*(cos((~x))^2) => 0.25*sin((~x))+0.25*sin(3*(~x))
+    r9 = @rule cos((~x))*(sin((~x))^2) => 0.25*cos((~x)) - 0.25*cos(3*(~x))
+    r10 = @rule (sin((~x))^2)*cos((~x)) => 0.25*cos((~x)) - 0.25*cos(3*(~x))
 
     ansatz_powers = []
     for j in 1:length(powers)
-        local power = simplify(expand(ansatz^(powers[j])), RuleSet([r1, r2, r3, r4, r5, r6]))
-        push!(ansatz_powers, simplify(expand(power), RuleSet([r1, r2, r3, r4, r5, r6])))
+        local power1 = simplify(expand(ansatz^(powers[j])))
+        local power2 = simplify(expand(power1), RuleSet([r3, r4]))
+        local power3 = simplify(expand(power2), RuleSet([r5, r6])) 
+        local power4 = simplify(expand(power3), RuleSet([r7, r8]))
+        push!(ansatz_powers, simplify(expand(power4), RuleSet([r9, r10])))
     end
 
     return ansatz_powers, ansatz_derivatives
@@ -69,3 +76,5 @@ println("First derivative")
 println(ansatz_derivatives[1])
 println("Second derivative")
 println(ansatz_derivatives[2])
+
+
