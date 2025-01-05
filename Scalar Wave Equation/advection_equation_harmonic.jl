@@ -28,11 +28,7 @@ diff_eq = DifferentialEquation(discretized_ODEs, nodes) #Create the Differential
 fixed = (A => 2, c => 10, k => 62) #Fixed parameters
 varied = ω => range(0.01, 3, n_cases) #Range of driving frequencies
 
-
-#Assign harmonics to nodes
-for j in nodes
-    add_harmonic!(diff_eq, nodes[j], [ω])  # Add the fundamental harmonic
-end
+[add_harmonic!(diff_eq,node, [ω]) for node in nodes]
 
 println(diff_eq)
 harmonic_eq = get_harmonic_equations(diff_eq)
