@@ -443,69 +443,116 @@ function power_derivatives(t, ansatz, powers, derivatives)
 end
 
 
+"Return the coefficient of f(ωt) in `x` where `f` is a cos or sin."
+function _fourier_term(x, ω, t, f)
+    term = x * f(ω * t)
+    term = trig_reduce(term)
+    indep = get_independent(term, t)
+    ft = Num(simplify_complex(Symbolics.expand(indep)))
+    ft = !isequal(ω, 0) ? 2 * ft : ft # extra factor in case ω = 0 !
+    return Symbolics.expand(ft)
+end
+
+# Harmonic Balance Substitution
 function harmonic_balance_substitution(ansatz, ode, ansatz_powers, ansatz_derivatives, harmonics, truncation_level)
-    # Rules for simplification to remove higher harmonics
+    # Simplification Rules for Trigonometric Identities
     r1 = @rule cos((~x))^2 => 0.5 + 0.5*cos(2*(~x))
     r2 = @rule sin((~x))^2 => 0.5 - 0.5*sin(2*(~x))
     r3 = @rule 2.0*~a*~b*sin((~x))*cos((~x)) => ~a*~b*sin(2*(~x))
     r4 = @rule 2.0*~a*~b*cos((~x))*sin((~x)) => ~a*~b*sin(2*(~x))
     r5 = @rule cos((~x))^3 => 0.75*cos((~x)) + 0.25*cos(3*(~x)) 
     r6 = @rule sin((~x))^3 => 0.75*sin((~x)) - 0.25*sin(3*(~x)) 
-    
     ruleset = RuleSet([r1, r2, r3, r4, r5, r6])
 
-    # Combine ansatz, powers, and derivatives into a single substitution dictionary
-    combined_expressions = [ansatz; ansatz_powers; ansatz_derivatives]
-    combined_dict = Dict()
-    for expr in combined_expressions
-        if isa(expr, Pair)
-            combined_dict[expr.first] = expr.second
-        else
-            combined_dict[expr] = expr
-        end
-    end
+    # Combine ansatz, powers, and derivatives into a substitution dictionary
+    combined_dict = Dict(
+        ansatz => ansatz,
+        (u₁*cos(t*ω) + v₁*sin(t*ω))^2 => ansatz_powers[1],
+        (u₁*cos(t*ω) + v₁*sin(t*ω))^3 => ansatz_powers[2],
+        Differential(t)(u₁*cos(t*ω) + v₁*sin(t*ω)) => ansatz_derivatives[1],
+        Differential(t)(Differential(t)(u₁*cos(t*ω) + v₁*sin(t*ω))) => ansatz_derivatives[2]
+    )
 
-    # Substitute into the differential equation
+    # Step 1: Explicit substitution
     substituted_eq = Symbolics.substitute(ode, combined_dict)
-    simplified_eq = simplify(Symbolics.expand(substituted_eq), ruleset)
+    #println(" After Substitution: ", substituted_eq)
 
-    # Filter higher harmonics (n > truncation_level)
-    valid_harmonics = [sin(n * ω * t) for n in 1:truncation_level] ∪ [cos(n * ω * t) for n in 1:truncation_level]
-    filtered_terms = []
-
-    # Break the simplified equation into terms
-    terms = isa(simplified_eq, Symbolics.Add) ? Symbolics.arguments(simplified_eq) : [simplified_eq]
+    # Step 2: Expand and simplify the equation
+    expanded_eq = Symbolics.expand(substituted_eq)
+    #println(" After Expansion: ", expanded_eq)
     
-    for term in terms
-        for harmonic in valid_harmonics
-            if occursin(string(harmonic), string(term))
-                push!(filtered_terms, term)
-                break
-            end
-        end
-    end
+    simplified_eq = Symbolics.simplify(expanded_eq, ruleset)
+    #println(" After Simplification: ", simplified_eq)
 
-    # Group terms by harmonics
+    # Step 3: Define valid harmonics (up to truncation level)
+    valid_harmonics = [sin(n * ω * t) for n in harmonics] ∪ [cos(n * ω * t) for n in harmonics]
+    #println("\n Valid Harmonics: ", valid_harmonics)
+
+    # Step 4: Group terms by harmonics
+    #grouped_terms = Dict(harmonic => Num(0) for harmonic in valid_harmonics)
+    terms = isa(simplified_eq, Symbolics.Add) ? Symbolics.arguments(simplified_eq) : [simplified_eq]
     grouped_terms = Dict(harmonic => Num(0) for harmonic in valid_harmonics)
-    for term in filtered_terms
-        # Ensure term is a Num and not an Equation
+    #println(" Terms after Expansion: ", terms)
+
+
+    for term in terms
         term_expr = term isa Equation ? term.lhs : term
+        term_expr = Symbolics.expand(term_expr)
+
+        matched = false
         for harmonic in valid_harmonics
-            if occursin(string(harmonic), string(term_expr))
-                grouped_terms[harmonic] += term_expr
+            try
+                # Match terms explicitly to harmonics
+                if occursin(string(harmonic), string(term_expr))
+                    grouped_terms[harmonic] += term_expr
+                    matched = true
+                    break
+                end
+            catch e
+                @warn " Failed to match term: $term_expr with harmonic: $harmonic. Error: $e"
             end
+        end
+
+        if !matched
+            @warn " Unmatched term during harmonic grouping: $term_expr"
         end
     end
 
-    # Return grouped harmonic terms as equations
+    # Step 5: Display grouped terms
+    #println(" Grouped Terms: ", grouped_terms)
+
+    # Step 6: Generate harmonic balance equations
     harmonic_equations = [grouped_terms[harmonic] ~ 0 for harmonic in valid_harmonics if !iszero(grouped_terms[harmonic])]
 
+    #println(" Harmonic Equations: ", harmonic_equations)
     return harmonic_equations
 end
 
 
+function harmonic_separation_with_fourier(equation, ω, t)
+    harmonics = [
+        (sin, ω, t),
+        (cos, ω, t),
+        (sin, 3*ω, t),
+        (cos, 3*ω, t)
+    ]
+
+    grouped_terms = Dict()
+
+    lhs = equation.lhs  # Extract left-hand side of the equation
+
+    for (f, freq, time) in harmonics
+        coeff = _fourier_term(lhs, freq, time, f)
+        grouped_terms[f(freq * time)] = coeff
+    end
+
+    return grouped_terms
+end
+
+
+
 #Example usage
-@variables t ω δ α β γ F u₁ v₁
+@variables t ω δ α β γ F u₁ v₁ c[1:2]
 D = Differential(t)
 ansatz, c = ansatz_definer(t, ω, [1])
 println(ansatz)
@@ -524,4 +571,19 @@ println("Second derivative")
 println(ansatz_derivatives[2])
 
 println("The harmonic balance substitution is:")
-println(harmonic_balance_substitution(ansatz, duffing_eq, ansatz_powers, ansatz_derivatives, [1], 1))
+harmonic_equations = harmonic_balance_substitution(ansatz, duffing_eq, ansatz_powers, ansatz_derivatives, [1], 1)
+println(harmonic_equations)
+expr = u₁*cos(t*ω)*α + v₁*sin(t*ω)*α + 
+       c[1]*cos(t*ω)*δ*ω - c[1]*sin(t*ω)*(ω^2) - 
+       c[2]*cos(t*ω)*(ω^2) - c[2]*sin(t*ω)*δ*ω - 
+       (1//4)*(c[1]^3)*sin(3t*ω)*β + (3//4)*(c[1]^3)*sin(t*ω)*β - 
+       (3//4)*(c[1]^2)*c[2]*cos(3t*ω)*β + (3//4)*(c[1]^2)*c[2]*cos(t*ω)*β + 
+       (3//4)*c[1]*(c[2]^2)*sin(3t*ω)*β + (3//4)*c[1]*(c[2]^2)*sin(t*ω)*β + 
+       (1//4)*(c[2]^3)*cos(3t*ω)*β + (3//4)*(c[2]^3)*cos(t*ω)*β ~ 0
+# Perform harmonic separation
+grouped_terms = harmonic_separation_with_fourier(expr, ω, t)
+
+# Display grouped terms
+for (harmonic, coeff) in grouped_terms
+    println("Coefficient of $harmonic: ", coeff)
+end
