@@ -529,7 +529,7 @@ function harmonic_balance_substitution(ansatz, ode, ansatz_powers, ansatz_deriva
 end
 
 
-function harmonic_separation_with_fourier(equation, ω, t)
+function harmonic_separation_with_fourier(equations::Vector{Equation}, ω, t)
     harmonics = [
         (sin, ω, t),
         (cos, ω, t),
@@ -537,17 +537,22 @@ function harmonic_separation_with_fourier(equation, ω, t)
         (cos, 3*ω, t)
     ]
 
-    grouped_terms = Dict()
+    # Initialize an empty list to store harmonic coefficients
+    harmonic_coefficients = []
 
-    lhs = equation.lhs  # Extract left-hand side of the equation
+    for eq in equations
+        lhs = eq.lhs  # Extract left-hand side of the current equation
 
-    for (f, freq, time) in harmonics
-        coeff = _fourier_term(lhs, freq, time, f)
-        grouped_terms[f(freq * time)] = coeff
+        for (f, freq, time) in harmonics
+            coeff = _fourier_term(lhs, freq, time, f)
+            harmonic = f(freq * time)
+            push!(harmonic_coefficients, (harmonic, coeff))  # Store as tuple (harmonic, coefficient)
+        end
     end
 
-    return grouped_terms
+    return harmonic_coefficients
 end
+
 
 
 
@@ -580,10 +585,10 @@ expr = u₁*cos(t*ω)*α + v₁*sin(t*ω)*α +
        (3//4)*(c[1]^2)*c[2]*cos(3t*ω)*β + (3//4)*(c[1]^2)*c[2]*cos(t*ω)*β + 
        (3//4)*c[1]*(c[2]^2)*sin(3t*ω)*β + (3//4)*c[1]*(c[2]^2)*sin(t*ω)*β + 
        (1//4)*(c[2]^3)*cos(3t*ω)*β + (3//4)*(c[2]^3)*cos(t*ω)*β ~ 0
-# Perform harmonic separation
-grouped_terms = harmonic_separation_with_fourier(expr, ω, t)
-
-# Display grouped terms
-for (harmonic, coeff) in grouped_terms
-    println("Coefficient of $harmonic: ", coeff)
+# Perform harmonic separation and store coefficients in a list
+harmonic_coefficients = harmonic_separation_with_fourier(harmonic_equations, ω, t)
+# Display harmonic coefficients
+for (harmonic, coeff) in harmonic_coefficients
+    println("Harmonic: $harmonic, Coefficient: $coeff")
 end
+println(harmonic_coefficients)
