@@ -32,6 +32,9 @@ using Symbolics:
 using OrderedCollections: OrderedDict
 using LinearAlgebra: LinearAlgebra
 using SymbolicUtils
+using HomotopyContinuation
+using LinearAlgebra
+using DynamicPolynomials
 import DynamicPolynomials: coefficient
 
 expand_all(x::Num) = Num(expand_all(x.val))
@@ -556,6 +559,55 @@ end
 
 
 
+function solve_polynomial_system(input_alpha, input_beta, input_gamma, input_delta, input_omega, input_funcs, returnnonsingular=false)
+    n = length(input_alpha) * 2  # number of unknown variables
+
+    # Declare variables
+    @polyvar u[1:n÷2] v[1:n÷2]
+
+    # Assign parameters
+    α = input_alpha
+    β = input_beta
+    γ = input_gamma
+    δ = input_delta
+    ω = input_omega
+
+    # Define the system of equations
+    f = input_funcs
+
+    # Define the system as a polynomial system
+    system = HomotopyContinuation.System(f)
+
+    # Solve the system
+    result = HomotopyContinuation.solve(system)
+
+    # Collect real solutions
+    real_solutions = []
+    for sol in result
+        if HomotopyContinuation.is_real(sol)
+            push!(real_solutions, sol)
+        end
+    end
+
+    # Return nonsingular solutions if requested
+    if returnnonsingular
+        nonsingular_solutions = []
+        for sol in real_solutions
+            if HomotopyContinuation.is_nonsingular(sol)
+                push!(nonsingular_solutions, sol)
+            end
+        end
+        return real_solutions, nonsingular_solutions
+    end
+
+    return real_solutions
+end
+
+
+
+
+
+
 #Example usage
 @variables t ω δ α β γ F u₁ v₁ c[1:2]
 D = Differential(t)
@@ -592,3 +644,52 @@ for (harmonic, coeff) in harmonic_coefficients
     println("Harmonic: $harmonic, Coefficient: $coeff")
 end
 println(harmonic_coefficients)
+
+
+n = 4 # number of unknown variables
+
+# declare the variables 
+@polyvar u[1:n÷2] v[1:n÷2]
+@polyvar f[1:n]
+
+# declare the parameters
+@polyvar α[1:n÷2]
+@polyvar β[1:n÷2]
+@polyvar γ[1:n÷2]
+@polyvar δ[1:n÷2]
+
+# this input funcs will take Hew's function as an input containing all the polynomial equations
+input_alpha = [1.0]
+input_beta = [0.04]
+input_gamma = [1.0]
+input_delta = [0.1]
+input_omega = [1.5]
+input_c = [1.0, 1.2]
+u₁ = [1.0]
+v₁ = [2.0]
+
+α = input_alpha
+β = input_beta
+γ = input_gamma
+δ = input_delta
+ω = input_omega[1]
+
+# Convert symbolic harmonic coefficients to polynomial expressions
+input_funcs = []
+forcing_term_coefficient = F
+for (harmonic, coeff) in harmonic_coefficients
+    if isequal(harmonic, cos(t*ω))  # Use isequal for symbolic comparison
+        push!(input_funcs, coeff ~ forcing_term_coefficient)   # Set to forcing term coefficient
+    else
+        push!(input_funcs, coeff ~ 0)   # Create the polynomial equation
+    end
+end
+
+println("The input functions are:")
+println(input_funcs)
+
+input_expressions = [HomotopyContinuation.Expression(eq.lhs) for eq in input_funcs]
+println("The input expressions are:")
+println(input_expressions)
+
+real_solutions = solve_polynomial_system(input_alpha, input_beta, input_gamma, input_delta, input_omega, input_expressions)
