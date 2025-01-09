@@ -390,8 +390,7 @@ function ansatz_simplifier(ansatz)
     return trig_reduce(ansatz)
 end
 
-"""
-@variables t w A
-ansatz = A*sin(2*w*t)*cos(13*w*t)
-println(ansatz_simplifier(ansatz))
-"""
+
+@variables t w A B C D
+ansatz = A*sin(w*t) + B*cos(w*t) + C*sin(3*w*t) + D*cos(3*w*t)
+println(ansatz_simplifier(ansatz^2))

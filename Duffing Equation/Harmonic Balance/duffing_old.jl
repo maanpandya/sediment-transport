@@ -7,7 +7,7 @@ diff_eq = DifferentialEquation(d(x,t,2) + ω0^2*x + α*x^3 + γ*d(x,t) ~ F*cos(�
 fixed = (α => 10., ω0 => 3, F => 5, γ=>0.01)   # fixed parameters
 varied = ω => range(0.9, 1.4, 2)           # range of parameter values
 
-add_harmonic!(diff_eq, x, [ω, 3*ω]) # specify the two-harmonics ansatz
+add_harmonic!(diff_eq, x, [ω]) # specify the two-harmonics ansatz
 harmonic_eq = get_harmonic_equations(diff_eq)
 print(harmonic_eq)
 

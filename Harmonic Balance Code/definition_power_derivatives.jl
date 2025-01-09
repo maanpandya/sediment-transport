@@ -399,15 +399,22 @@ end
 #ω -> angular frequency of the ansatz
 #harmonics -> list of integers for the harmonics to consider
 #c -> list of unknown coefficients
+#n -> number of equations in the system (for example, a 2 mass system creates a system of 2 equations)
 
-function ansatz_definer(t, ω, harmonics)
+function ansatz_definer(t, ω, harmonics, n)
 
-    @variables c[1:2*length(harmonics)] #Define unknown coefficients for each harmonic term
+    @variables c[1:2*length(harmonics)*n] #Define unknown coefficients for each harmonic term
 
-    ansatz = zero(t)
-    for i in 1:length(harmonics)
-        ansatz += c[2*i-1]*sin(harmonics[i]*ω*t) + c[2*i]*cos(harmonics[i]*ω*t)
+    ansatz = [] #Each element is the ansatz for one variable
+    global k = 1
+    for j in 1:n
+        push!(ansatz, zero(t))
+        for i in 1:length(harmonics)
+            ansatz[j] += c[(2*k-1)]*sin(harmonics[i]*ω*t) + c[(2*k)]*cos(harmonics[i]*ω*t)
+            k += 1
+        end
     end
+    
     return ansatz, c 
 end
 
@@ -417,43 +424,62 @@ end
 
 function power_derivatives(t, ansatz, powers, derivatives)
 
-    #Derivative calculation
     ansatz_derivatives = []
-    i = 1
-    while i <= length(derivatives)
-        
-        if i == 1
-            push!(ansatz_derivatives, Symbolics.simplify(Symbolics.derivative(ansatz, t))) 
-        else 
-            push!(ansatz_derivatives, Symbolics.simplify(Symbolics.derivative(ansatz_derivatives[i-1], t)))
-        end
-        i += 1
-    end
-
-    #Power calculation
-
     ansatz_powers = []
-    for j in 1:length(powers)
-        push!(ansatz_powers, ansatz_simplifier(ansatz^(powers[j])))
+    for k in 1:length(ansatz)
+        #Derivative calculation
+        sub_ansatz_derivatives = []
+        i = 1
+        while i <= length(derivatives)
+            
+            if i == 1
+                push!(sub_ansatz_derivatives, Symbolics.simplify(Symbolics.derivative(ansatz[k], t))) 
+            else 
+                push!(sub_ansatz_derivatives, Symbolics.simplify(Symbolics.derivative(sub_ansatz_derivatives[i-1], t)))
+            end
+            i += 1
+        end
+
+        #Power calculation
+
+        sub_ansatz_powers = []
+        for j in 1:length(powers)
+            push!(sub_ansatz_powers, ansatz_simplifier(ansatz[k]^(powers[j])))
+        end
+        push!(ansatz_derivatives, sub_ansatz_derivatives)
+        push!(ansatz_powers, sub_ansatz_powers)
     end
 
     return ansatz_powers, ansatz_derivatives
 end
 
+
 #Example usage
 @variables t, ω
-ansatz, c = ansatz_definer(t, ω, [1])
-println(ansatz)
+ansatz, c = ansatz_definer(t, ω, [1, 3], 2)
+println(c)
+println(ansatz[1])
+println(ansatz[2])
 
 ansatz_powers, ansatz_derivatives = power_derivatives(t, ansatz, [2, 3], [1, 2])
-println("The results are:")
+println("The result for ansatz 1 are:")
 println("Power of 2")
-println(ansatz_powers[1])
+println(ansatz_powers[1][1])
 println("Power of 3")
-println(ansatz_powers[2])
+println(ansatz_powers[1][2])
 println("First derivative")
-println(ansatz_derivatives[1])
+println(ansatz_derivatives[1][1])
 println("Second derivative")
-println(ansatz_derivatives[2])
+println(ansatz_derivatives[1][2])
+
+println("The result for ansatz 2 are:")
+println("Power of 2")
+println(ansatz_powers[2][1])
+println("Power of 3")
+println(ansatz_powers[2][2])
+println("First derivative")
+println(ansatz_derivatives[2][1])
+println("Second derivative")
+println(ansatz_derivatives[2][2])
 
 
