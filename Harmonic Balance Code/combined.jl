@@ -470,22 +470,22 @@ function harmonic_balance_substitution(ansatz, ode, ansatz_powers, ansatz_deriva
     # Combine ansatz, powers, and derivatives into a substitution dictionary
     combined_dict = Dict(
         ansatz => ansatz,
-        (u₁*cos(t*ω) + v₁*sin(t*ω))^2 => ansatz_powers[1],
-        (u₁*cos(t*ω) + v₁*sin(t*ω))^3 => ansatz_powers[2],
-        Differential(t)(u₁*cos(t*ω) + v₁*sin(t*ω)) => ansatz_derivatives[1],
-        Differential(t)(Differential(t)(u₁*cos(t*ω) + v₁*sin(t*ω))) => ansatz_derivatives[2]
+        (ansatz)^2 => ansatz_powers[1],
+        (ansatz)^3 => ansatz_powers[2],
+        Differential(t)(ansatz) => ansatz_derivatives[1],
+        Differential(t)(Differential(t)(ansatz)) => ansatz_derivatives[2]
     )
 
     # Step 1: Explicit substitution
     substituted_eq = Symbolics.substitute(ode, combined_dict)
-    #println(" After Substitution: ", substituted_eq)
+    println(" After Substitution: ", substituted_eq)
 
     # Step 2: Expand and simplify the equation
     expanded_eq = Symbolics.expand(substituted_eq)
-    #println(" After Expansion: ", expanded_eq)
+    println(" After Expansion: ", expanded_eq)
     
     simplified_eq = Symbolics.simplify(expanded_eq, ruleset)
-    #println(" After Simplification: ", simplified_eq)
+    println(" After Simplification: ", simplified_eq)
 
     # Step 3: Define valid harmonics (up to truncation level)
     valid_harmonics = [sin(n * ω * t) for n in harmonics] ∪ [cos(n * ω * t) for n in harmonics]
@@ -609,13 +609,13 @@ end
 
 
 #Example usage
-@variables t ω δ α β γ F u₁ v₁ c[1:2]
+@variables t ω δ α β γ F c[1:2]
 D = Differential(t)
 ansatz, c = ansatz_definer(t, ω, [1])
 println(ansatz)
 
-duffing_eq = D(D(u₁*cos(ω*t) + v₁*sin(ω*t))) + δ*D(u₁*cos(ω*t) + v₁*sin(ω*t)) + α*(u₁*cos(ω*t) + v₁*sin(ω*t)) + β*(u₁*cos(ω*t) + v₁*sin(ω*t))^3 ~ F*cos(ω*t)
-
+duffing_eq = D(D(ansatz)) + δ*D(ansatz) + α*ansatz + β*(ansatz)^3 ~ F*cos(ω*t)
+println(duffing_eq)
 ansatz_powers, ansatz_derivatives = power_derivatives(t, ansatz, [2, 3], [1, 2])
 println("The results are:")
 println("Power of 2")
@@ -629,14 +629,9 @@ println(ansatz_derivatives[2])
 
 println("The harmonic balance substitution is:")
 harmonic_equations = harmonic_balance_substitution(ansatz, duffing_eq, ansatz_powers, ansatz_derivatives, [1], 1)
+println("Output of harmonic balance substitution:")
 println(harmonic_equations)
-expr = u₁*cos(t*ω)*α + v₁*sin(t*ω)*α + 
-       c[1]*cos(t*ω)*δ*ω - c[1]*sin(t*ω)*(ω^2) - 
-       c[2]*cos(t*ω)*(ω^2) - c[2]*sin(t*ω)*δ*ω - 
-       (1//4)*(c[1]^3)*sin(3t*ω)*β + (3//4)*(c[1]^3)*sin(t*ω)*β - 
-       (3//4)*(c[1]^2)*c[2]*cos(3t*ω)*β + (3//4)*(c[1]^2)*c[2]*cos(t*ω)*β + 
-       (3//4)*c[1]*(c[2]^2)*sin(3t*ω)*β + (3//4)*c[1]*(c[2]^2)*sin(t*ω)*β + 
-       (1//4)*(c[2]^3)*cos(3t*ω)*β + (3//4)*(c[2]^3)*cos(t*ω)*β ~ 0
+
 # Perform harmonic separation and store coefficients in a list
 harmonic_coefficients = harmonic_separation_with_fourier(harmonic_equations, ω, t)
 # Display harmonic coefficients
@@ -645,51 +640,5 @@ for (harmonic, coeff) in harmonic_coefficients
 end
 println(harmonic_coefficients)
 
-
-n = 4 # number of unknown variables
-
-# declare the variables 
-@polyvar u[1:n÷2] v[1:n÷2]
-@polyvar f[1:n]
-
-# declare the parameters
-@polyvar α[1:n÷2]
-@polyvar β[1:n÷2]
-@polyvar γ[1:n÷2]
-@polyvar δ[1:n÷2]
-
-# this input funcs will take Hew's function as an input containing all the polynomial equations
-input_alpha = [1.0]
-input_beta = [0.04]
-input_gamma = [1.0]
-input_delta = [0.1]
-input_omega = [1.5]
-input_c = [1.0, 1.2]
-u₁ = [1.0]
-v₁ = [2.0]
-
-α = input_alpha
-β = input_beta
-γ = input_gamma
-δ = input_delta
-ω = input_omega[1]
-
-# Convert symbolic harmonic coefficients to polynomial expressions
-input_funcs = []
-forcing_term_coefficient = F
-for (harmonic, coeff) in harmonic_coefficients
-    if isequal(harmonic, cos(t*ω))  # Use isequal for symbolic comparison
-        push!(input_funcs, coeff ~ forcing_term_coefficient)   # Set to forcing term coefficient
-    else
-        push!(input_funcs, coeff ~ 0)   # Create the polynomial equation
-    end
-end
-
-println("The input functions are:")
+input_funcs = [coeff for (harmonic, coeff) in harmonic_coefficients]
 println(input_funcs)
-
-input_expressions = [HomotopyContinuation.Expression(eq.lhs) for eq in input_funcs]
-println("The input expressions are:")
-println(input_expressions)
-
-real_solutions = solve_polynomial_system(input_alpha, input_beta, input_gamma, input_delta, input_omega, input_expressions)
