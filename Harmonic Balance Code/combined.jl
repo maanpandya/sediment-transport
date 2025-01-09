@@ -556,14 +556,46 @@ function harmonic_separation_with_fourier(equations::Vector{Equation}, ω, t)
     return harmonic_coefficients
 end
 
+#Example usage
+@variables t ω δ α β γ F c[1:2]
+D = Differential(t)
+ansatz, c = ansatz_definer(t, ω, [1])
+println(ansatz)
 
+duffing_eq = D(D(ansatz)) + δ*D(ansatz) + α*ansatz + β*(ansatz)^3 ~ F*cos(ω*t)
+println(duffing_eq)
+ansatz_powers, ansatz_derivatives = power_derivatives(t, ansatz, [2, 3], [1, 2])
+println("The results are:")
+println("Power of 2")
+println(ansatz_powers[1])
+println("Power of 3")
+println(ansatz_powers[2])
+println("First derivative")
+println(ansatz_derivatives[1])
+println("Second derivative")
+println(ansatz_derivatives[2])
 
+println("The harmonic balance substitution is:")
+harmonic_equations = harmonic_balance_substitution(ansatz, duffing_eq, ansatz_powers, ansatz_derivatives, [1], 1)
+println("Output of harmonic balance substitution:")
+println(harmonic_equations)
+
+# Perform harmonic separation and store coefficients in a list
+harmonic_coefficients = harmonic_separation_with_fourier(harmonic_equations, ω, t)
+# Display harmonic coefficients
+for (harmonic, coeff) in harmonic_coefficients
+    println("Harmonic: $harmonic, Coefficient: $coeff")
+end
+println(harmonic_coefficients)
+
+input_funcs = [coeff for (harmonic, coeff) in harmonic_coefficients]
+println(input_funcs)
 
 function solve_polynomial_system(input_alpha, input_beta, input_gamma, input_delta, input_omega, input_funcs, returnnonsingular=false)
     n = length(input_alpha) * 2  # number of unknown variables
 
     # Declare variables
-    @polyvar u[1:n÷2] v[1:n÷2]
+    @polyvar c[1:n]
 
     # Assign parameters
     α = input_alpha
@@ -603,42 +635,5 @@ function solve_polynomial_system(input_alpha, input_beta, input_gamma, input_del
     return real_solutions
 end
 
-
-
-
-
-
-#Example usage
-@variables t ω δ α β γ F c[1:2]
-D = Differential(t)
-ansatz, c = ansatz_definer(t, ω, [1])
-println(ansatz)
-
-duffing_eq = D(D(ansatz)) + δ*D(ansatz) + α*ansatz + β*(ansatz)^3 ~ F*cos(ω*t)
-println(duffing_eq)
-ansatz_powers, ansatz_derivatives = power_derivatives(t, ansatz, [2, 3], [1, 2])
 println("The results are:")
-println("Power of 2")
-println(ansatz_powers[1])
-println("Power of 3")
-println(ansatz_powers[2])
-println("First derivative")
-println(ansatz_derivatives[1])
-println("Second derivative")
-println(ansatz_derivatives[2])
-
-println("The harmonic balance substitution is:")
-harmonic_equations = harmonic_balance_substitution(ansatz, duffing_eq, ansatz_powers, ansatz_derivatives, [1], 1)
-println("Output of harmonic balance substitution:")
-println(harmonic_equations)
-
-# Perform harmonic separation and store coefficients in a list
-harmonic_coefficients = harmonic_separation_with_fourier(harmonic_equations, ω, t)
-# Display harmonic coefficients
-for (harmonic, coeff) in harmonic_coefficients
-    println("Harmonic: $harmonic, Coefficient: $coeff")
-end
-println(harmonic_coefficients)
-
-input_funcs = [coeff for (harmonic, coeff) in harmonic_coefficients]
-println(input_funcs)
+println(solve_polynomial_system([1], [0.04], [1], [0.1], [1.5], input_funcs))
