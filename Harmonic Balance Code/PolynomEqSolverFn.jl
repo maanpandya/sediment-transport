@@ -1,6 +1,8 @@
 using HomotopyContinuation
 using LinearAlgebra
 using DynamicPolynomials
+using Symbolics
+using SymbolicUtils
 
 function solve_polynomial_system(input_alpha, input_beta, input_gamma, input_delta, input_omega, input_funcs, returnnonsingular=false)
     n = length(input_alpha) * 2  # number of unknown variables
@@ -49,14 +51,14 @@ end
 n = 4 # number of unknown variables
 
 # declare the variables 
-@polyvar u[1:n÷2] v[1:n÷2]
-@polyvar f[1:n]
+@variables u[1:n÷2] v[1:n÷2]
+@variables f[1:n]
 
 # declare the parameters
-@polyvar α[1:n÷2]
-@polyvar β[1:n÷2]
-@polyvar γ[1:n÷2]
-@polyvar δ[1:n÷2]
+@variables α[1:n÷2]
+@variables β[1:n÷2]
+@variables γ[1:n÷2]
+@variables δ[1:n÷2]
 
 # this input funcs will take Hew's function as an input containing all the polynomial equations
 input_alpha = [1.0, 1.1]
@@ -78,4 +80,38 @@ input_function = [
     ω[1]*δ[2]*u[2] + (ω[1]^2 - α[2])*v[2] - (3/4)*β[2]*(v[2]^3 + u[2]^2*v[2])
 ]
 
-solve_polynomial_system(input_alpha, input_beta, input_gamma, input_delta, input_omega, input_function)
+
+println(typeof(input_function))
+new_eq = input_function[1]
+
+println(new_eq)
+println(typeof(new_eq))
+
+@polyvar u_poly[1:1] v_poly[1:1]
+
+# Parameter values
+ω_val = [2.0]
+α_val = [1.0]
+δ_val = [0.1]
+γ_val = [1.0]
+β_val = [0.04]
+
+# Create polynomial equation by substituting numeric values and polynomial variables
+poly_eq = Symbolics.substitute(new_eq, 
+    Dict(
+        # ω[1] => ω_val[1],
+        # α[1] => α_val[1],
+        # δ[1] => δ_val[1],
+        # γ[1] => γ_val[1],
+        # β[1] => β_val[1],
+        u[1] => u_poly[1],
+        v[1] => v_poly[1]
+    )
+)
+
+println(typeof(poly_eq))
+
+# result = solve(system)
+# println(result)
+
+# solve_polynomial_system(input_alpha, input_beta, input_gamma, input_delta, input_omega, input_function)

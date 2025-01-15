@@ -591,21 +591,92 @@ println(harmonic_coefficients)
 input_funcs = [coeff for (harmonic, coeff) in harmonic_coefficients]
 println(input_funcs)
 
+# function solve_polynomial_system(input_alpha, input_beta, input_gamma, input_delta, input_omega, input_funcs, returnnonsingular=false)
+#     n = length(input_alpha) * 2  # number of unknown variables
+
+#     # Declare variables
+#     @polyvar c[1:n]
+
+#     # Assign parameters
+#     α = input_alpha
+#     β = input_beta
+#     γ = input_gamma
+#     δ = input_delta
+#     ω = input_omega
+
+#     # Define the system of equations
+#     f = input_funcs
+
+#     # Define the system as a polynomial system
+#     system = HomotopyContinuation.System(f)
+
+#     # Solve the system
+#     result = HomotopyContinuation.solve(system)
+
+#     # Collect real solutions
+#     real_solutions = []
+#     for sol in result
+#         if HomotopyContinuation.is_real(sol)
+#             push!(real_solutions, sol)
+#         end
+#     end
+
+#     # Return nonsingular solutions if requested
+#     if returnnonsingular
+#         nonsingular_solutions = []
+#         for sol in real_solutions
+#             if HomotopyContinuation.is_nonsingular(sol)
+#                 push!(nonsingular_solutions, sol)
+#             end
+#         end
+#         return real_solutions, nonsingular_solutions
+#     end
+
+#     return real_solutions
+# end
+
+# Inside solve_polynomial_system function:
+
 function solve_polynomial_system(input_alpha, input_beta, input_gamma, input_delta, input_omega, input_funcs, returnnonsingular=false)
     n = length(input_alpha) * 2  # number of unknown variables
 
-    # Declare variables
-    @polyvar c[1:n]
+    # 1. Declare polynomial variables
+    @polyvar c_poly[1:n]  # coefficients
+    @polyvar α_poly[1:length(input_alpha)]
+    @polyvar β_poly[1:length(input_beta)]
+    @polyvar γ_poly[1:length(input_gamma)]
+    @polyvar δ_poly[1:length(input_delta)]
+    @polyvar ω_poly[1:length(input_omega)]
 
-    # Assign parameters
-    α = input_alpha
-    β = input_beta
-    γ = input_gamma
-    δ = input_delta
-    ω = input_omega
+    # 2. Create substitution dictionary
+    substitution_dict = Dict()
+    
+    # Map symbolic variables to polynomial variables
+    for i in 1:length(input_alpha)
+        substitution_dict[α[i]] = input_alpha[i]
+        substitution_dict[β[i]] = input_beta[i]
+        substitution_dict[γ[i]] = input_gamma[i]
+        substitution_dict[δ[i]] = input_delta[i]
+    end
+    
+    for i in 1:length(input_omega)
+        substitution_dict[ω[i]] = input_omega[i]
+    end
 
+    # Map coefficients
+    for i in 1:n
+        substitution_dict[c[i]] = c_poly[i]  # Map symbolic c to polynomial c
+    end
+
+    # 3. Convert each equation in input_funcs to polynomial form
+    poly_funcs = [Symbolics.substitute(eq, substitution_dict) for eq in input_funcs]
+
+    println("Converted polynomial system:")
+    println(poly_funcs)
+    println(typeof(poly_funcs))
+    
     # Define the system of equations
-    f = input_funcs
+    f = poly_funcs
 
     # Define the system as a polynomial system
     system = HomotopyContinuation.System(f)
@@ -636,4 +707,4 @@ function solve_polynomial_system(input_alpha, input_beta, input_gamma, input_del
 end
 
 println("The results are:")
-println(solve_polynomial_system([1], [0.04], [1], [0.1], [1.5], input_funcs))
+println(solve_polynomial_system([1.2], [0.04], [0.3], [0.1], [1.5], input_funcs))
