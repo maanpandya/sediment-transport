@@ -479,68 +479,85 @@ function harmonic_balance_substitution(ansatz, ode, ansatz_powers, ansatz_deriva
     r6 = @rule sin((~x))^3 => 0.75*sin((~x)) - 0.25*sin(3*(~x)) 
     ruleset = RuleSet([r1, r2, r3, r4, r5, r6])
 
-    # Combine ansatz, powers, and derivatives into a substitution dictionary
-    combined_dict = Dict(
-        ansatz => ansatz,
-        (ansatz)^2 => ansatz_powers[1],
-        (ansatz)^3 => ansatz_powers[2],
-        Differential(t)(ansatz) => ansatz_derivatives[1],
-        Differential(t)(Differential(t)(ansatz)) => ansatz_derivatives[2]
-    )
+    # Handle multiple equations
+    if !(ode isa Vector)
+        ode = [ode]
+    end
 
-    # Step 1: Explicit substitution
-    substituted_eq = Symbolics.substitute(ode, combined_dict)
-    println(" After Substitution: ", substituted_eq)
+    substituted_eqs = []
+    for (i, eq) in enumerate(ode)
+        # Combine ansatz, powers, and derivatives into a substitution dictionary for each equation
+        combined_dict = Dict(
+            ansatz[i] => ansatz[i],
+            (ansatz[i])^2 => ansatz_powers[i][1],
+            (ansatz[i])^3 => ansatz_powers[i][2],
+            Differential(t)(ansatz[i]) => ansatz_derivatives[i][1],
+            Differential(t)(Differential(t)(ansatz[i])) => ansatz_derivatives[i][2]
+        )
 
-    # Step 2: Expand and simplify the equation
-    expanded_eq = Symbolics.expand(substituted_eq)
-    println(" After Expansion: ", expanded_eq)
-    
-    simplified_eq = Symbolics.simplify(expanded_eq, ruleset)
-    println(" After Simplification: ", simplified_eq)
-
-    # Step 3: Define valid harmonics (up to truncation level)
-    valid_harmonics = [sin(n * ω * t) for n in harmonics] ∪ [cos(n * ω * t) for n in harmonics]
-    #println("\n Valid Harmonics: ", valid_harmonics)
-
-    # Step 4: Group terms by harmonics
-    #grouped_terms = Dict(harmonic => Num(0) for harmonic in valid_harmonics)
-    terms = isa(simplified_eq, Symbolics.Add) ? Symbolics.arguments(simplified_eq) : [simplified_eq]
-    grouped_terms = Dict(harmonic => Num(0) for harmonic in valid_harmonics)
-    #println(" Terms after Expansion: ", terms)
-
-
-    for term in terms
-        term_expr = term isa Equation ? term.lhs : term
-        term_expr = Symbolics.expand(term_expr)
-
-        matched = false
-        for harmonic in valid_harmonics
-            try
-                # Match terms explicitly to harmonics
-                if occursin(string(harmonic), string(term_expr))
-                    grouped_terms[harmonic] += term_expr
-                    matched = true
-                    break
-                end
-            catch e
-                @warn " Failed to match term: $term_expr with harmonic: $harmonic. Error: $e"
+        # For terms involving differences between ansatz
+        for j in 1:length(ansatz)
+            if j != i
+                combined_dict[ansatz[j]] = ansatz[j]
+                combined_dict[(ansatz[j])^2] = ansatz_powers[j][1]
+                combined_dict[(ansatz[j])^3] = ansatz_powers[j][2]
+                combined_dict[Differential(t)(ansatz[j])] = ansatz_derivatives[j][1]
+                combined_dict[Differential(t)(Differential(t)(ansatz[j]))] = ansatz_derivatives[j][2]
             end
         end
 
-        if !matched
-            @warn " Unmatched term during harmonic grouping: $term_expr"
-        end
+        # Step 1: Explicit substitution
+        substituted_eq = Symbolics.substitute(eq, combined_dict)
+        println("After Substitution for equation $i: ", substituted_eq)
+
+        # Step 2: Expand and simplify the equation
+        expanded_eq = Symbolics.expand(substituted_eq)
+        println("After Expansion for equation $i: ", expanded_eq)
+        
+        simplified_eq = Symbolics.simplify(expanded_eq, ruleset)
+        println("After Simplification for equation $i: ", simplified_eq)
+
+        push!(substituted_eqs, simplified_eq)
     end
 
-    # Step 5: Display grouped terms
-    #println(" Grouped Terms: ", grouped_terms)
+    # Step 3: Define valid harmonics (up to truncation level)
+    valid_harmonics = [sin(n * ω * t) for n in harmonics] ∪ [cos(n * ω * t) for n in harmonics]
 
-    # Step 6: Generate harmonic balance equations
-    harmonic_equations = [grouped_terms[harmonic] ~ 0 for harmonic in valid_harmonics if !iszero(grouped_terms[harmonic])]
+    # Step 4: Group terms by harmonics for each equation
+    all_harmonic_equations = []
+    
+    for (i, simplified_eq) in enumerate(substituted_eqs)
+        terms = isa(simplified_eq, Symbolics.Add) ? Symbolics.arguments(simplified_eq) : [simplified_eq]
+        grouped_terms = Dict(harmonic => Num(0) for harmonic in valid_harmonics)
 
-    #println(" Harmonic Equations: ", harmonic_equations)
-    return harmonic_equations
+        for term in terms
+            term_expr = term isa Equation ? term.lhs : term
+            term_expr = Symbolics.expand(term_expr)
+
+            matched = false
+            for harmonic in valid_harmonics
+                try
+                    if occursin(string(harmonic), string(term_expr))
+                        grouped_terms[harmonic] += term_expr
+                        matched = true
+                        break
+                    end
+                catch e
+                    @warn "Failed to match term: $term_expr with harmonic: $harmonic. Error: $e"
+                end
+            end
+
+            if !matched
+                @warn "Unmatched term during harmonic grouping: $term_expr"
+            end
+        end
+
+        # Generate harmonic balance equations for this ODE
+        harmonic_equations = [grouped_terms[harmonic] ~ 0 for harmonic in valid_harmonics if !iszero(grouped_terms[harmonic])]
+        append!(all_harmonic_equations, harmonic_equations)
+    end
+
+    return all_harmonic_equations
 end
 
 
@@ -589,18 +606,28 @@ duffing_eq = [
 ]
 println(duffing_eq)
 ansatz_powers, ansatz_derivatives = power_derivatives(t, ansatz, [2, 3], [1, 2])
-println("The results are:")
+println("The result for ansatz 1 are:")
 println("Power of 2")
-println(ansatz_powers[1])
+println(ansatz_powers[1][1])
 println("Power of 3")
-println(ansatz_powers[2])
+println(ansatz_powers[1][2])
 println("First derivative")
-println(ansatz_derivatives[1])
+println(ansatz_derivatives[1][1])
 println("Second derivative")
-println(ansatz_derivatives[2])
+println(ansatz_derivatives[1][2])
+
+println("The result for ansatz 2 are:")
+println("Power of 2")
+println(ansatz_powers[2][1])
+println("Power of 3")
+println(ansatz_powers[2][2])
+println("First derivative")
+println(ansatz_derivatives[2][1])
+println("Second derivative")
+println(ansatz_derivatives[2][2])
 
 println("The harmonic balance substitution is:")
-harmonic_equations = harmonic_balance_substitution(ansatz, duffing_eq, ansatz_powers, ansatz_derivatives, [1], 1)
+harmonic_equations = harmonic_balance_substitution(ansatz, duffing_eq, ansatz_powers, ansatz_derivatives, harmonics, 1)
 println("Output of harmonic balance substitution:")
 println(harmonic_equations)
 
