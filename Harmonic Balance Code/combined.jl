@@ -559,10 +559,10 @@ end
 #Example usage
 @variables t ω δ α β γ F c[1:4]
 D = Differential(t)
-ansatz, c = ansatz_definer(t, ω, [1,3])
+ansatz, c = ansatz_definer(t, ω, [1, 3])
 println(ansatz)
 
-duffing_eq = D(D(ansatz)) + δ*D(ansatz) + α*ansatz + β*(ansatz)^3 ~ F*cos(ω*t)
+duffing_eq = D(D(ansatz)) + δ*D(ansatz) + α*ansatz + β*(ansatz)^3 ~ γ*cos(ω*t)
 println(duffing_eq)
 ansatz_powers, ansatz_derivatives = power_derivatives(t, ansatz, [2, 3], [1, 2])
 println("The results are:")
@@ -605,7 +605,7 @@ function solve_polynomial_system(num_harmonics,input_alpha, input_beta, input_ga
     @variables γ[1:length(input_gamma)]
 
     # add gamma as forcing term to first equation from input_funcs
-    input_funcs[1] += γ[1]
+    input_funcs[2] -= γ[1]
 
     # 2. Create substitution dictionary
     substitution_dict = Dict()
