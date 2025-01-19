@@ -428,24 +428,30 @@ end
 
 function power_derivatives(t, ansatz, powers, derivatives)
 
-    #Derivative calculation
     ansatz_derivatives = []
-    i = 1
-    while i <= length(derivatives)
-        
-        if i == 1
-            push!(ansatz_derivatives, Symbolics.simplify(Symbolics.derivative(ansatz, t))) 
-        else 
-            push!(ansatz_derivatives, Symbolics.simplify(Symbolics.derivative(ansatz_derivatives[i-1], t)))
-        end
-        i += 1
-    end
-
-    #Power calculation
-
     ansatz_powers = []
-    for j in 1:length(powers)
-        push!(ansatz_powers, ansatz_simplifier(ansatz^(powers[j])))
+    for k in 1:length(ansatz)
+        #Derivative calculation
+        sub_ansatz_derivatives = []
+        i = 1
+        while i <= length(derivatives)
+            
+            if i == 1
+                push!(sub_ansatz_derivatives, Symbolics.simplify(Symbolics.derivative(ansatz[k], t))) 
+            else 
+                push!(sub_ansatz_derivatives, Symbolics.simplify(Symbolics.derivative(sub_ansatz_derivatives[i-1], t)))
+            end
+            i += 1
+        end
+
+        #Power calculation
+
+        sub_ansatz_powers = []
+        for j in 1:length(powers)
+            push!(sub_ansatz_powers, ansatz_simplifier(ansatz[k]^(powers[j])))
+        end
+        push!(ansatz_derivatives, sub_ansatz_derivatives)
+        push!(ansatz_powers, sub_ansatz_powers)
     end
 
     return ansatz_powers, ansatz_derivatives
@@ -563,12 +569,24 @@ function harmonic_separation_with_fourier(equations::Vector{Equation}, ω, t)
 end
 
 #Example usage
-@variables t ω δ α β γ F c[1:2]
+harmonics = [1]
+NumMasses = 2
+@variables t ω δ α β γ c[1:2*length(harmonics)*NumMasses]
+# Use this once we make the functiosn array friendly
+# if NumMasses == 1
+#     @variables t ω δ α β γ c[1:2*length(harmonics)*NumMasses]
+# else
+#     @variables t ω δ[1:NumMasses] α[1:NumMasses] β[1:NumMasses] γ m[1:NumMasses] c[1:2*length(harmonics)*NumMasses]
+# end
 D = Differential(t)
-ansatz, c = ansatz_definer(t, ω, [1])
+ansatz, c = ansatz_definer(t, ω, harmonics, NumMasses)
 println(ansatz)
 
-duffing_eq = D(D(ansatz)) + δ*D(ansatz) + α*ansatz + β*(ansatz)^3 ~ γ*cos(ω*t)
+#duffing_eq = D(D(ansatz)) + δ*D(ansatz) + α*ansatz + β*(ansatz)^3 ~ γ*cos(ω*t)
+duffing_eq = [
+    D(D(ansatz[1])) ~ -δ*D(ansatz[1]) - α*ansatz[1] - β*(ansatz[1])^3 + δ*(D(ansatz[2])-D(ansatz[1])) + α*(ansatz[2]-ansatz[1]) + β*(ansatz[2]-ansatz[1])^3,
+    D(D(ansatz[2])) ~ γ*cos(ω*t) - δ*(D(ansatz[2])-D(ansatz[1])) - α*(ansatz[2]-ansatz[1]) - β*(ansatz[2] - ansatz[1])^3
+]
 println(duffing_eq)
 ansatz_powers, ansatz_derivatives = power_derivatives(t, ansatz, [2, 3], [1, 2])
 println("The results are:")
