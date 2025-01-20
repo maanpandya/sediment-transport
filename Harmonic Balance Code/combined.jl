@@ -36,6 +36,8 @@ using HomotopyContinuation
 using LinearAlgebra
 using DynamicPolynomials
 import DynamicPolynomials: coefficient
+using FFTW
+using Statistics
 
 expand_all(x::Num) = Num(expand_all(x.val))
 _apply_termwise(f, x::Num) = wrap(_apply_termwise(f, unwrap(x)))
@@ -535,9 +537,9 @@ end
 function harmonic_separation_with_fourier(equations::Vector{Equation}, ω, t)
     harmonics = [
         (sin, ω, t),
-        (cos, ω, t)
-        # (sin, 3*ω, t),
-        # (cos, 3*ω, t)
+        (cos, ω, t),
+        (sin, 3*ω, t),
+        (cos, 3*ω, t)
     ]
 
     # Initialize an empty list to store harmonic coefficients
@@ -557,9 +559,9 @@ function harmonic_separation_with_fourier(equations::Vector{Equation}, ω, t)
 end
 
 #Example usage
-@variables t ω δ α β γ F c[1:2]
+@variables t ω δ α β γ F c[1:4]
 D = Differential(t)
-ansatz, c = ansatz_definer(t, ω, [1])
+ansatz, c = ansatz_definer(t, ω, [1,3])
 println(ansatz)
 
 duffing_eq = D(D(ansatz)) + δ*D(ansatz) + α*ansatz + β*(ansatz)^3 ~ γ*cos(ω*t)
@@ -579,6 +581,7 @@ println("The harmonic balance substitution is:")
 harmonic_equations = harmonic_balance_substitution(ansatz, duffing_eq, ansatz_powers, ansatz_derivatives, [1], 1)
 println("Output of harmonic balance substitution:")
 println(harmonic_equations)
+println(typeof(harmonic_equations))
 
 # Perform harmonic separation and store coefficients in a list
 harmonic_coefficients = harmonic_separation_with_fourier(harmonic_equations, ω, t)
@@ -668,4 +671,49 @@ function solve_polynomial_system(num_harmonics,input_alpha, input_beta, input_ga
 end
 
 println("The results are:")
-println(solve_polynomial_system(2,[1], [0.04], [1], [0.1], [1], input_funcs))
+# println(solve_polynomial_system(2,[1], [0.04], [1], [0.1], [1], input_funcs))
+sol = solve_polynomial_system(2,[1], [0.04], [1], [0.1], [1], input_funcs)
+
+# Extract real values from PathResult
+coeff = [real.(HomotopyContinuation.solution(s)) for s in sol][1]
+
+# remove the outer array
+# coeff = coeff[1]
+
+subs_dict = Dict(c[i] => coeff[i] for i in 1:length(coeff))
+# substitute value of ω into the ansatz
+subs_dict[ω] = 1
+
+# Perform single substitution
+ansatz = Symbolics.substitute(ansatz, subs_dict)
+
+
+println(ansatz)
+
+# define function to plot fft
+
+function plot_fft(coeff, n_harmonics, ω)
+    # calculate amplitude of each harmonic
+    coeff_pairs = [coeff[i:i+1] for i in 1:2:length(coeff)]
+
+    # calculate amplitude of each harmonic
+    amplitude = [sqrt(c[1]^2 + c[2]^2) for c in coeff_pairs]
+    ω_harmonics = [(2*i-1)*ω for i in 1:n_harmonics]
+
+    # plot with fixed formatting
+    p = plot(ω_harmonics, amplitude, 
+        seriestype = :bar,
+        bar_width = 0.03, 
+        label = "Amplitude of Harmonics", 
+        xlabel = "Frequency", 
+        ylabel = "Amplitude", 
+        xticks = 0:1:6,  # Simplified ticks
+        xlims = (0,6.5),
+        size = (600, 450)  # Control plot size
+    )
+    
+    display(p)  # Ensure plot is displayed
+    return p
+end
+
+# plot_fft(coeff, 2, 1)
