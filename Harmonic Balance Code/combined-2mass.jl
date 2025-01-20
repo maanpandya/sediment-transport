@@ -486,15 +486,16 @@ function harmonic_balance_substitution(ansatz, ode, ansatz_powers, ansatz_deriva
     end
 
     substituted_eqs = []
-    for (i, eq) in enumerate(ode)
+    for eq in ode
         # Build substitution dictionary for ansatz i
-        combined_dict = Dict(
-            ansatz[i] => ansatz[i],
-            (ansatz[i])^2 => ansatz_powers[i][1],
-            (ansatz[i])^3 => ansatz_powers[i][2],
-            Differential(t)(ansatz[i]) => ansatz_derivatives[i][1],
-            Differential(t)(Differential(t)(ansatz[i])) => ansatz_derivatives[i][2]
-        )
+        combined_dict = Dict()
+        for (idx, ans) in pairs(ansatz)
+            combined_dict[ans] = ans
+            combined_dict[ans^2] = ansatz_powers[idx][1]
+            combined_dict[ans^3] = ansatz_powers[idx][2]
+            combined_dict[Differential(t)(ans)] = ansatz_derivatives[idx][1]
+            combined_dict[Differential(t)(Differential(t)(ans))] = ansatz_derivatives[idx][2]
+        end
         # (Optionally merge in other ansatz[j] substitutions if needed)
 
         # Substitution
