@@ -486,7 +486,7 @@ function harmonic_balance_substitution(ansatz, ode, ansatz_powers, ansatz_deriva
     end
 
     substituted_eqs = []
-    for eq in ode
+    for eq in ode #This way, each ODE sees all the needed substitutions (including the other masses) and you won’t be left with stray Differential(t)(...).
         # Build substitution dictionary for ansatz i
         combined_dict = Dict()
         for (idx, ans) in pairs(ansatz)
