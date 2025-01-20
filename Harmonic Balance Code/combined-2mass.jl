@@ -549,9 +549,9 @@ end
 function harmonic_separation_with_fourier(equations, ω, t)
     harmonics = [
         (sin, ω, t),
-        (cos, ω, t)#,
-        # (sin, 3*ω, t),
-        # (cos, 3*ω, t)
+        (cos, ω, t),
+        (sin, 3*ω, t),
+        (cos, 3*ω, t)
     ]
 
     # Initialize an empty list to store harmonic coefficients
@@ -571,7 +571,7 @@ function harmonic_separation_with_fourier(equations, ω, t)
 end
 
 #Example usage
-harmonics = [1]
+harmonics = [1, 3]
 NumMasses = 2
 @variables t ω δ α β γ c[1:2*length(harmonics)*NumMasses]
 # Use this once we make the functiosn array friendly
@@ -625,41 +625,38 @@ end
 println(harmonic_coefficients)
 
 input_funcs = [coeff for (harmonic, coeff) in harmonic_coefficients]
+println("The input functions are:")
 println(input_funcs)
 
 
-function solve_polynomial_system(num_harmonics,input_alpha, input_beta, input_gamma, input_delta, input_omega, input_funcs, returnnonsingular=false)
-    n = num_harmonics * 2 # number of unknown variables
+function solve_polynomial_system(n, input_alpha, input_beta, input_gamma, input_delta, input_omega, input_funcs, returnnonsingular=false)
 
     # 1. Declare polynomial variables
     @polyvar c_p[1:n]  # coefficients
-    @polyvar α_poly[1:length(input_alpha)]
-    @polyvar β_poly[1:length(input_beta)]
-    @polyvar γ_poly[1:length(input_gamma)]
-    @polyvar δ_poly[1:length(input_delta)]
-    @polyvar ω_poly[1:length(input_omega)]
-    @variables γ[1:length(input_gamma)]
-
-    # add gamma as forcing term to first equation from input_funcs
-    input_funcs[2] -= γ[1]
 
     # 2. Create substitution dictionary
     substitution_dict = Dict()
     
     # Map symbolic variables to polynomial variables
-    for i in 1:length(input_alpha)
-        substitution_dict[α[i]] = input_alpha[i]
-        substitution_dict[β[i]] = input_beta[i]
-        substitution_dict[γ[i]] = input_gamma[i]
-        substitution_dict[δ[i]] = input_delta[i]
+    for (i, val) in enumerate(input_alpha)
+        substitution_dict[α] = val
+    end
+    for (i, val) in enumerate(input_beta)
+        substitution_dict[β] = val
+    end
+    for (i, val) in enumerate(input_gamma)
+        substitution_dict[γ] = val
+    end
+    for (i, val) in enumerate(input_delta)
+        substitution_dict[δ] = val
     end
     
-    for i in 1:length(input_omega)
-        substitution_dict[ω[i]] = input_omega[i]
+    for (i, val) in enumerate(input_omega)
+        substitution_dict[ω] = val
     end
 
     # Map coefficients
-    for i in 1:n
+    for i in eachindex(c_p)
         substitution_dict[c[i]] = c_p[i]  # Map symbolic c to polynomial c
     end
 
@@ -668,6 +665,7 @@ function solve_polynomial_system(num_harmonics,input_alpha, input_beta, input_ga
 
     println("Converted polynomial system:")
     println(poly_funcs)
+    println(length(poly_funcs))
     println(typeof(poly_funcs))
     
     # Define the system of equations
@@ -704,4 +702,4 @@ function solve_polynomial_system(num_harmonics,input_alpha, input_beta, input_ga
 end
 
 println("The results are:")
-println(solve_polynomial_system(2,[1], [0.04], [1], [0.1], [1], input_funcs))
+println(solve_polynomial_system(2*length(harmonics)*NumMasses,[1], [0.37], [1], [0.1], [1], input_funcs))
