@@ -537,9 +537,9 @@ end
 function harmonic_separation_with_fourier(equations::Vector{Equation}, ω, t)
     harmonics = [
         (sin, ω, t),
-        (cos, ω, t)
-        # (sin, 3*ω, t),
-        # (cos, 3*ω, t)
+        (cos, ω, t),
+        (sin, 3*ω, t),
+        (cos, 3*ω, t)
     ]
 
     # Initialize an empty list to store harmonic coefficients
@@ -559,9 +559,9 @@ function harmonic_separation_with_fourier(equations::Vector{Equation}, ω, t)
 end
 
 #Example usage
-@variables t ω δ α β γ F c[1:2]
+@variables t ω δ α β γ F c[1:4]
 D = Differential(t)
-ansatz, c = ansatz_definer(t, ω, [1])
+ansatz, c = ansatz_definer(t, ω, [1,3])
 println(ansatz)
 
 duffing_eq = D(D(ansatz)) + δ*D(ansatz) + α*ansatz + β*(ansatz)^3 ~ γ*cos(ω*t)
@@ -581,6 +581,7 @@ println("The harmonic balance substitution is:")
 harmonic_equations = harmonic_balance_substitution(ansatz, duffing_eq, ansatz_powers, ansatz_derivatives, [1], 1)
 println("Output of harmonic balance substitution:")
 println(harmonic_equations)
+println(typeof(harmonic_equations))
 
 # Perform harmonic separation and store coefficients in a list
 harmonic_coefficients = harmonic_separation_with_fourier(harmonic_equations, ω, t)
@@ -715,4 +716,4 @@ function plot_fft(coeff, n_harmonics, ω)
     return p
 end
 
-plot_fft(coeff, 2, 1)
+# plot_fft(coeff, 2, 1)
