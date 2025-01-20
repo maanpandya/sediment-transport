@@ -546,7 +546,7 @@ function harmonic_balance_substitution(ansatz, ode, ansatz_powers, ansatz_deriva
 end
 
 
-function harmonic_separation_with_fourier(equations::Vector{Equation}, ω, t)
+function harmonic_separation_with_fourier(equations, ω, t)
     harmonics = [
         (sin, ω, t),
         (cos, ω, t)#,
