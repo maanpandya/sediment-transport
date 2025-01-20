@@ -535,9 +535,9 @@ end
 function harmonic_separation_with_fourier(equations::Vector{Equation}, ω, t)
     harmonics = [
         (sin, ω, t),
-        (cos, ω, t),
-        (sin, 3*ω, t),
-        (cos, 3*ω, t)
+        (cos, ω, t)
+        # (sin, 3*ω, t),
+        # (cos, 3*ω, t)
     ]
 
     # Initialize an empty list to store harmonic coefficients
@@ -557,9 +557,9 @@ function harmonic_separation_with_fourier(equations::Vector{Equation}, ω, t)
 end
 
 #Example usage
-@variables t ω δ α β γ F c[1:4]
+@variables t ω δ α β γ F c[1:2]
 D = Differential(t)
-ansatz, c = ansatz_definer(t, ω, [1, 3])
+ansatz, c = ansatz_definer(t, ω, [1])
 println(ansatz)
 
 duffing_eq = D(D(ansatz)) + δ*D(ansatz) + α*ansatz + β*(ansatz)^3 ~ γ*cos(ω*t)

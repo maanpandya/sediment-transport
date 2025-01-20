@@ -469,8 +469,9 @@ function _fourier_term(x, ω, t, f)
 end
 
 # Harmonic Balance Substitution
+
 function harmonic_balance_substitution(ansatz, ode, ansatz_powers, ansatz_derivatives, harmonics, truncation_level)
-    # Simplification Rules for Trigonometric Identities
+    # Simplification Rules
     r1 = @rule cos((~x))^2 => 0.5 + 0.5*cos(2*(~x))
     r2 = @rule sin((~x))^2 => 0.5 - 0.5*sin(2*(~x))
     r3 = @rule 2.0*~a*~b*sin((~x))*cos((~x)) => ~a*~b*sin(2*(~x))
@@ -479,14 +480,14 @@ function harmonic_balance_substitution(ansatz, ode, ansatz_powers, ansatz_deriva
     r6 = @rule sin((~x))^3 => 0.75*sin((~x)) - 0.25*sin(3*(~x)) 
     ruleset = RuleSet([r1, r2, r3, r4, r5, r6])
 
-    # Handle multiple equations
+    # Ensure ODE is a vector of equations
     if !(ode isa Vector)
         ode = [ode]
     end
 
     substituted_eqs = []
     for (i, eq) in enumerate(ode)
-        # Combine ansatz, powers, and derivatives into a substitution dictionary for each equation
+        # Build substitution dictionary for ansatz i
         combined_dict = Dict(
             ansatz[i] => ansatz[i],
             (ansatz[i])^2 => ansatz_powers[i][1],
@@ -494,67 +495,50 @@ function harmonic_balance_substitution(ansatz, ode, ansatz_powers, ansatz_deriva
             Differential(t)(ansatz[i]) => ansatz_derivatives[i][1],
             Differential(t)(Differential(t)(ansatz[i])) => ansatz_derivatives[i][2]
         )
+        # (Optionally merge in other ansatz[j] substitutions if needed)
 
-        # For terms involving differences between ansatz
-        for j in 1:length(ansatz)
-            if j != i
-                combined_dict[ansatz[j]] = ansatz[j]
-                combined_dict[(ansatz[j])^2] = ansatz_powers[j][1]
-                combined_dict[(ansatz[j])^3] = ansatz_powers[j][2]
-                combined_dict[Differential(t)(ansatz[j])] = ansatz_derivatives[j][1]
-                combined_dict[Differential(t)(Differential(t)(ansatz[j]))] = ansatz_derivatives[j][2]
-            end
-        end
-
-        # Step 1: Explicit substitution
+        # Substitution
         substituted_eq = Symbolics.substitute(eq, combined_dict)
-        println("After Substitution for equation $i: ", substituted_eq)
-
-        # Step 2: Expand and simplify the equation
         expanded_eq = Symbolics.expand(substituted_eq)
-        println("After Expansion for equation $i: ", expanded_eq)
-        
         simplified_eq = Symbolics.simplify(expanded_eq, ruleset)
-        println("After Simplification for equation $i: ", simplified_eq)
 
         push!(substituted_eqs, simplified_eq)
     end
 
-    # Step 3: Define valid harmonics (up to truncation level)
+    # Define valid harmonics
     valid_harmonics = [sin(n * ω * t) for n in harmonics] ∪ [cos(n * ω * t) for n in harmonics]
 
-    # Step 4: Group terms by harmonics for each equation
     all_harmonic_equations = []
-    
-    for (i, simplified_eq) in enumerate(substituted_eqs)
-        terms = isa(simplified_eq, Symbolics.Add) ? Symbolics.arguments(simplified_eq) : [simplified_eq]
+    for simplified_eq in substituted_eqs
+        # Combine LHS and RHS => eq_eval = LHS - RHS
+        eq_eval = simplified_eq.lhs - simplified_eq.rhs
+        eq_eval = Symbolics.expand(eq_eval)
+        eq_eval = Symbolics.simplify(eq_eval, ruleset)
+
+        # Collect terms
+        terms = isa(eq_eval, Symbolics.Add) ? Symbolics.arguments(eq_eval) : [eq_eval]
         grouped_terms = Dict(harmonic => Num(0) for harmonic in valid_harmonics)
 
         for term in terms
-            term_expr = term isa Equation ? term.lhs : term
-            term_expr = Symbolics.expand(term_expr)
-
             matched = false
             for harmonic in valid_harmonics
-                try
-                    if occursin(string(harmonic), string(term_expr))
-                        grouped_terms[harmonic] += term_expr
-                        matched = true
-                        break
-                    end
-                catch e
-                    @warn "Failed to match term: $term_expr with harmonic: $harmonic. Error: $e"
+                if occursin(string(harmonic), string(term))
+                    grouped_terms[harmonic] += term
+                    matched = true
+                    break
                 end
             end
-
             if !matched
-                @warn "Unmatched term during harmonic grouping: $term_expr"
+                @warn "Unmatched term: $term"
             end
         end
 
-        # Generate harmonic balance equations for this ODE
-        harmonic_equations = [grouped_terms[harmonic] ~ 0 for harmonic in valid_harmonics if !iszero(grouped_terms[harmonic])]
-        append!(all_harmonic_equations, harmonic_equations)
+        # Generate equations
+        for harmonic in valid_harmonics
+            if !iszero(grouped_terms[harmonic])
+                push!(all_harmonic_equations, grouped_terms[harmonic] ~ 0)
+            end
+        end
     end
 
     return all_harmonic_equations
