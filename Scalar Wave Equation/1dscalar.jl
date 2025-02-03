@@ -594,7 +594,7 @@ nx = 3
 A = create_diff_matrix(nx)
 print(A)
 @variables t ω F[1:nx]
-
+F = [1, 1, 1]
 # Explicitly define forcing terms without broadcasting
 f = [F[i] * sin(ω*t) for i in 1:nx]
 n = nx
@@ -709,4 +709,80 @@ function solve_polynomial_system(n, input_alpha, input_beta, input_gamma, input_
     return real_solutions
 end
 
+# function solve_harmonic_balance(input_funcs, c, ω_value=1.0)
+#     # To solve a system of polynomial equations
+# end
+
+function extract_matrix_from_equations(input_funcs, n)
+    # n is the length of vector c (6 in this case)
+    H = zeros(n, n)
+    b = zeros(n)
+    
+    for (i, eq) in enumerate(input_funcs)
+        # Convert equation to string and split into terms
+        eq_str = string(eq)
+        terms = split(eq_str, r"(?=[-+])")
+        
+        for term in terms
+            term = strip(term)
+            if term == ""
+                continue
+            end
+            
+            # Handle constant terms
+            if !contains(term, "c[") && !contains(term, "ω")
+                b[i] = parse(Float64, term)
+                continue
+            end
+            
+            # Extract coefficient and index for c terms
+            if contains(term, "c[")
+                coef = 1.0
+                if term[1] == '-'
+                    coef = -1.0
+                end
+                
+                # Extract numerical coefficient if present
+                m = match(r"([-+]?[\d.]+)?c\[(\d+)\]", term)
+                if m !== nothing
+                    if m.captures[1] !== nothing
+                        coef *= parse(Float64, m.captures[1])
+                    end
+                    idx = parse(Int, m.captures[2])
+                    H[i, idx] = coef
+                end
+            end
+            
+            # Handle ω terms
+            if contains(term, "ω")
+                coef = 1.0
+                if term[1] == '-'
+                    coef = -1.0
+                end
+                
+                # Extract which c[i] multiplies ω
+                m = match(r"c\[(\d+)\]\*ω", term)
+                if m !== nothing
+                    idx = parse(Int, m.captures[1])
+                    H[i, idx] = coef
+                end
+            end
+        end
+    end
+    
+    return H, b
+end
+
 println("The results are:")
+ω = 1.0
+H, b = extract_matrix_from_equations(input_funcs, 6)
+println("Matrix H:")
+display(H)
+println("\nVector b:")
+display(b)
+
+# Solve the system
+c_p = H \ (-b)
+
+println("\nSolved coefficients:")
+display(c_p)
