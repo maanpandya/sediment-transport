@@ -36,6 +36,8 @@ using HomotopyContinuation
 using LinearAlgebra
 using DynamicPolynomials
 import DynamicPolynomials: coefficient
+using FFTW
+using Statistics
 
 expand_all(x::Num) = Num(expand_all(x.val))
 _apply_termwise(f, x::Num) = wrap(_apply_termwise(f, unwrap(x)))
@@ -405,20 +407,14 @@ end
 #harmonics -> list of integers for the harmonics to consider
 #c -> list of unknown coefficients
 
-function ansatz_definer(t, ω, harmonics, n)
+function ansatz_definer(t, ω, harmonics)
 
-    @variables c[1:2*length(harmonics)*n] #Define unknown coefficients for each harmonic term
+    @variables c[1:2*length(harmonics)] #Define unknown coefficients for each harmonic term
 
-    ansatz = [] #Each element is the ansatz for one variable
-    global k = 1
-    for j in 1:n
-        push!(ansatz, zero(t))
-        for i in 1:length(harmonics)
-            ansatz[j] += c[(2*k-1)]*sin(harmonics[i]*ω*t) + c[(2*k)]*cos(harmonics[i]*ω*t)
-            k += 1
-        end
+    ansatz = zero(t)
+    for i in 1:length(harmonics)
+        ansatz += c[2*i-1]*sin(harmonics[i]*ω*t) + c[2*i]*cos(harmonics[i]*ω*t)
     end
-    
     return ansatz, c 
 end
 
@@ -428,30 +424,24 @@ end
 
 function power_derivatives(t, ansatz, powers, derivatives)
 
+    #Derivative calculation
     ansatz_derivatives = []
+    i = 1
+    while i <= length(derivatives)
+        
+        if i == 1
+            push!(ansatz_derivatives, Symbolics.simplify(Symbolics.derivative(ansatz, t))) 
+        else 
+            push!(ansatz_derivatives, Symbolics.simplify(Symbolics.derivative(ansatz_derivatives[i-1], t)))
+        end
+        i += 1
+    end
+
+    #Power calculation
+
     ansatz_powers = []
-    for k in 1:length(ansatz)
-        #Derivative calculation
-        sub_ansatz_derivatives = []
-        i = 1
-        while i <= length(derivatives)
-            
-            if i == 1
-                push!(sub_ansatz_derivatives, Symbolics.simplify(Symbolics.derivative(ansatz[k], t))) 
-            else 
-                push!(sub_ansatz_derivatives, Symbolics.simplify(Symbolics.derivative(sub_ansatz_derivatives[i-1], t)))
-            end
-            i += 1
-        end
-
-        #Power calculation
-
-        sub_ansatz_powers = []
-        for j in 1:length(powers)
-            push!(sub_ansatz_powers, ansatz_simplifier(ansatz[k]^(powers[j])))
-        end
-        push!(ansatz_derivatives, sub_ansatz_derivatives)
-        push!(ansatz_powers, sub_ansatz_powers)
+    for j in 1:length(powers)
+        push!(ansatz_powers, ansatz_simplifier(ansatz^(powers[j])))
     end
 
     return ansatz_powers, ansatz_derivatives
@@ -469,9 +459,8 @@ function _fourier_term(x, ω, t, f)
 end
 
 # Harmonic Balance Substitution
-
 function harmonic_balance_substitution(ansatz, ode, ansatz_powers, ansatz_derivatives, harmonics, truncation_level)
-    # Simplification Rules
+    # Simplification Rules for Trigonometric Identities
     r1 = @rule cos((~x))^2 => 0.5 + 0.5*cos(2*(~x))
     r2 = @rule sin((~x))^2 => 0.5 - 0.5*sin(2*(~x))
     r3 = @rule 2.0*~a*~b*sin((~x))*cos((~x)) => ~a*~b*sin(2*(~x))
@@ -480,73 +469,72 @@ function harmonic_balance_substitution(ansatz, ode, ansatz_powers, ansatz_deriva
     r6 = @rule sin((~x))^3 => 0.75*sin((~x)) - 0.25*sin(3*(~x)) 
     ruleset = RuleSet([r1, r2, r3, r4, r5, r6])
 
-    # Ensure ODE is a vector of equations
-    if !(ode isa Vector)
-        ode = [ode]
-    end
+    # Combine ansatz, powers, and derivatives into a substitution dictionary
+    combined_dict = Dict(
+        ansatz => ansatz,
+        (ansatz)^2 => ansatz_powers[1],
+        (ansatz)^3 => ansatz_powers[2],
+        Differential(t)(ansatz) => ansatz_derivatives[1],
+        Differential(t)(Differential(t)(ansatz)) => ansatz_derivatives[2]
+    )
 
-    substituted_eqs = []
-    for eq in ode #This way, each ODE sees all the needed substitutions (including the other masses) and you won’t be left with stray Differential(t)(...).
-        # Build substitution dictionary for ansatz i
-        combined_dict = Dict()
-        for (idx, ans) in pairs(ansatz)
-            combined_dict[ans] = ans
-            combined_dict[ans^2] = ansatz_powers[idx][1]
-            combined_dict[ans^3] = ansatz_powers[idx][2]
-            combined_dict[Differential(t)(ans)] = ansatz_derivatives[idx][1]
-            combined_dict[Differential(t)(Differential(t)(ans))] = ansatz_derivatives[idx][2]
-        end
-        # (Optionally merge in other ansatz[j] substitutions if needed)
+    # Step 1: Explicit substitution
+    substituted_eq = Symbolics.substitute(ode, combined_dict)
+    println(" After Substitution: ", substituted_eq)
 
-        # Substitution
-        substituted_eq = Symbolics.substitute(eq, combined_dict)
-        expanded_eq = Symbolics.expand(substituted_eq)
-        simplified_eq = Symbolics.simplify(expanded_eq, ruleset)
+    # Step 2: Expand and simplify the equation
+    expanded_eq = Symbolics.expand(substituted_eq)
+    println(" After Expansion: ", expanded_eq)
+    
+    simplified_eq = Symbolics.simplify(expanded_eq, ruleset)
+    println(" After Simplification: ", simplified_eq)
 
-        push!(substituted_eqs, simplified_eq)
-    end
-
-    # Define valid harmonics
+    # Step 3: Define valid harmonics (up to truncation level)
     valid_harmonics = [sin(n * ω * t) for n in harmonics] ∪ [cos(n * ω * t) for n in harmonics]
+    #println("\n Valid Harmonics: ", valid_harmonics)
 
-    all_harmonic_equations = []
-    for simplified_eq in substituted_eqs
-        # Combine LHS and RHS => eq_eval = LHS - RHS
-        eq_eval = simplified_eq.lhs - simplified_eq.rhs
-        eq_eval = Symbolics.expand(eq_eval)
-        eq_eval = Symbolics.simplify(eq_eval, ruleset)
+    # Step 4: Group terms by harmonics
+    #grouped_terms = Dict(harmonic => Num(0) for harmonic in valid_harmonics)
+    terms = isa(simplified_eq, Symbolics.Add) ? Symbolics.arguments(simplified_eq) : [simplified_eq]
+    grouped_terms = Dict(harmonic => Num(0) for harmonic in valid_harmonics)
+    #println(" Terms after Expansion: ", terms)
 
-        # Collect terms
-        terms = isa(eq_eval, Symbolics.Add) ? Symbolics.arguments(eq_eval) : [eq_eval]
-        grouped_terms = Dict(harmonic => Num(0) for harmonic in valid_harmonics)
 
-        for term in terms
-            matched = false
-            for harmonic in valid_harmonics
-                if occursin(string(harmonic), string(term))
-                    grouped_terms[harmonic] += term
+    for term in terms
+        term_expr = term isa Equation ? term.lhs : term
+        term_expr = Symbolics.expand(term_expr)
+
+        matched = false
+        for harmonic in valid_harmonics
+            try
+                # Match terms explicitly to harmonics
+                if occursin(string(harmonic), string(term_expr))
+                    grouped_terms[harmonic] += term_expr
                     matched = true
                     break
                 end
-            end
-            if !matched
-                @warn "Unmatched term: $term"
+            catch e
+                @warn " Failed to match term: $term_expr with harmonic: $harmonic. Error: $e"
             end
         end
 
-        # Generate equations
-        for harmonic in valid_harmonics
-            if !iszero(grouped_terms[harmonic])
-                push!(all_harmonic_equations, grouped_terms[harmonic] ~ 0)
-            end
+        if !matched
+            @warn " Unmatched term during harmonic grouping: $term_expr"
         end
     end
 
-    return all_harmonic_equations
+    # Step 5: Display grouped terms
+    #println(" Grouped Terms: ", grouped_terms)
+
+    # Step 6: Generate harmonic balance equations
+    harmonic_equations = [grouped_terms[harmonic] ~ 0 for harmonic in valid_harmonics if !iszero(grouped_terms[harmonic])]
+
+    #println(" Harmonic Equations: ", harmonic_equations)
+    return harmonic_equations
 end
 
 
-function harmonic_separation_with_fourier(equations, ω, t)
+function harmonic_separation_with_fourier(equations::Vector{Equation}, ω, t)
     harmonics = [
         (sin, ω, t),
         (cos, ω, t),
@@ -572,49 +560,29 @@ end
 
 #Example usage
 harmonics = [1, 3]
-NumMasses = 2
-@variables t ω δ α β γ c[1:2*length(harmonics)*NumMasses]
-# Use this once we make the functiosn array friendly
-# if NumMasses == 1
-#     @variables t ω δ α β γ c[1:2*length(harmonics)*NumMasses]
-# else
-#     @variables t ω δ[1:NumMasses] α[1:NumMasses] β[1:NumMasses] γ m[1:NumMasses] c[1:2*length(harmonics)*NumMasses]
-# end
+@variables t ω ε γ c[1:2*length(harmonics)]
 D = Differential(t)
-ansatz, c = ansatz_definer(t, ω, harmonics, NumMasses)
+ansatz, c = ansatz_definer(t, ω, harmonics)
 println(ansatz)
 
-#duffing_eq = D(D(ansatz)) + δ*D(ansatz) + α*ansatz + β*(ansatz)^3 ~ γ*cos(ω*t)
-duffing_eq = [
-    D(D(ansatz[1])) ~ -δ*D(ansatz[1]) - α*ansatz[1] - β*(ansatz[1])^3 + δ*(D(ansatz[2])-D(ansatz[1])) + α*(ansatz[2]-ansatz[1]) + β*(ansatz[2]-ansatz[1])^3,
-    D(D(ansatz[2])) ~ γ*cos(ω*t) - δ*(D(ansatz[2])-D(ansatz[1])) - α*(ansatz[2]-ansatz[1]) - β*(ansatz[2] - ansatz[1])^3
-]
-println(duffing_eq)
+rayleigh_eq = D(D(ansatz)) + ε*(D(ansatz)^3 - D(ansatz)) + ansatz ~ γ*cos(ω*t)
+println(rayleigh_eq)
 ansatz_powers, ansatz_derivatives = power_derivatives(t, ansatz, [2, 3], [1, 2])
-println("The result for ansatz 1 are:")
+println("The results are:")
 println("Power of 2")
-println(ansatz_powers[1][1])
+println(ansatz_powers[1])
 println("Power of 3")
-println(ansatz_powers[1][2])
+println(ansatz_powers[2])
 println("First derivative")
-println(ansatz_derivatives[1][1])
+println(ansatz_derivatives[1])
 println("Second derivative")
-println(ansatz_derivatives[1][2])
-
-println("The result for ansatz 2 are:")
-println("Power of 2")
-println(ansatz_powers[2][1])
-println("Power of 3")
-println(ansatz_powers[2][2])
-println("First derivative")
-println(ansatz_derivatives[2][1])
-println("Second derivative")
-println(ansatz_derivatives[2][2])
+println(ansatz_derivatives[2])
 
 println("The harmonic balance substitution is:")
-harmonic_equations = harmonic_balance_substitution(ansatz, duffing_eq, ansatz_powers, ansatz_derivatives, harmonics, 1)
+harmonic_equations = harmonic_balance_substitution(ansatz, rayleigh_eq, ansatz_powers, ansatz_derivatives, [1], 1)
 println("Output of harmonic balance substitution:")
 println(harmonic_equations)
+println(typeof(harmonic_equations))
 
 # Perform harmonic separation and store coefficients in a list
 harmonic_coefficients = harmonic_separation_with_fourier(harmonic_equations, ω, t)
@@ -625,47 +593,38 @@ end
 println(harmonic_coefficients)
 
 input_funcs = [coeff for (harmonic, coeff) in harmonic_coefficients]
-println("The input functions are:")
 println(input_funcs)
 
 
-function solve_polynomial_system(n, input_alpha, input_beta, input_gamma, input_delta, input_omega, input_funcs, returnnonsingular=false)
+function solve_polynomial_system(num_harmonics, input_epsilon, input_gamma, input_omega, input_funcs; returnnonsingular=false)
+    n = num_harmonics * 2
+    @polyvar c_p[1:n]
+    @polyvar ε_poly[1:length(input_epsilon)]
+    @polyvar γ_poly[1:length(input_gamma)]
+    @polyvar ω_poly[1:length(input_omega)]
+    @variables γ[1:length(input_gamma)]
 
-    # 1. Declare polynomial variables
-    @polyvar c_p[1:n]  # coefficients
+    # Subtract forcing term γ[1] from one of the equations (example usage):
+    input_funcs[2] -= γ[1]
 
-    # 2. Create substitution dictionary
+    # Build substitution dictionary
     substitution_dict = Dict()
-    
-    # Map symbolic variables to polynomial variables
-    for (i, val) in enumerate(input_alpha)
-        substitution_dict[α] = val
+    for i in 1:length(input_epsilon)
+        substitution_dict[ε[i]] = input_epsilon[i]
     end
-    for (i, val) in enumerate(input_beta)
-        substitution_dict[β] = val
+    for i in 1:length(input_gamma)
+        substitution_dict[γ[i]] = input_gamma[i]
     end
-    for (i, val) in enumerate(input_gamma)
-        substitution_dict[γ] = val
+    for i in 1:length(input_omega)
+        substitution_dict[ω[i]] = input_omega[i]
     end
-    for (i, val) in enumerate(input_delta)
-        substitution_dict[δ] = val
-    end
-    
-    for (i, val) in enumerate(input_omega)
-        substitution_dict[ω] = val
+    for i in 1:n
+        substitution_dict[c[i]] = c_p[i]
     end
 
-    # Map coefficients
-    for i in eachindex(c_p)
-        substitution_dict[c[i]] = c_p[i]  # Map symbolic c to polynomial c
-    end
-
-    # 3. Convert each equation in input_funcs to polynomial form
     poly_funcs = [Symbolics.substitute(eq, substitution_dict) for eq in input_funcs]
-
     println("Converted polynomial system:")
     println(poly_funcs)
-    println(length(poly_funcs))
     println(typeof(poly_funcs))
     
     # Define the system of equations
@@ -702,4 +661,48 @@ function solve_polynomial_system(n, input_alpha, input_beta, input_gamma, input_
 end
 
 println("The results are:")
-println(solve_polynomial_system(2*length(harmonics)*NumMasses,[1], [0.37], [1], [0.1], [1], input_funcs))
+sol = solve_polynomial_system(2, [0.1], [1], [1], input_funcs)
+
+# Extract real values from PathResult
+coeff = [real.(HomotopyContinuation.solution(s)) for s in sol][1]
+
+# remove the outer array
+# coeff = coeff[1]
+
+subs_dict = Dict(c[i] => coeff[i] for i in 1:length(coeff))
+# substitute value of ω into the ansatz
+subs_dict[ω] = 1
+
+# Perform single substitution
+ansatz = Symbolics.substitute(ansatz, subs_dict)
+
+
+println(ansatz)
+
+# define function to plot fft
+
+function plot_fft(coeff, n_harmonics, ω)
+    # calculate amplitude of each harmonic
+    coeff_pairs = [coeff[i:i+1] for i in 1:2:length(coeff)]
+
+    # calculate amplitude of each harmonic
+    amplitude = [sqrt(c[1]^2 + c[2]^2) for c in coeff_pairs]
+    ω_harmonics = [(2*i-1)*ω for i in 1:n_harmonics]
+
+    # plot with fixed formatting
+    p = plot(ω_harmonics, amplitude, 
+        seriestype = :bar,
+        bar_width = 0.03, 
+        label = "Amplitude of Harmonics", 
+        xlabel = "Frequency", 
+        ylabel = "Amplitude", 
+        xticks = 0:1:6,  # Simplified ticks
+        xlims = (0,6.5),
+        size = (600, 450)  # Control plot size
+    )
+    
+    display(p)  # Ensure plot is displayed
+    return p
+end
+
+# plot_fft(coeff, 2, 1)
