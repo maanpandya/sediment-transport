@@ -33,7 +33,7 @@ using OrderedCollections: OrderedDict
 using LinearAlgebra: LinearAlgebra
 using SymbolicUtils
 using HomotopyContinuation
-using LinearAlgebra
+using LinearAlgebra, SparseArrays
 using DynamicPolynomials
 import DynamicPolynomials: coefficient
 
@@ -570,48 +570,57 @@ function harmonic_separation_with_fourier(equations, ω, t)
     return harmonic_coefficients
 end
 
+function create_diff_matrix(nx, L=2π; bc=:periodic)
+    dx = L / (nx - 1)
+    A = zeros(nx, nx)
+    for i in 2:nx-1
+        A[i, i-1] = -1/(2dx)
+        A[i, i+1] = 1/(2dx)
+    end
+    # Periodic boundary conditions
+    if bc == :periodic
+        A[1, end] = -1/(2dx)
+        A[1, 2] = 1/(2dx)
+        A[end, end-1] = -1/(2dx)
+        A[end, 1] = 1/(2dx)
+    end
+    return A
+end
+
 #Example usage
 harmonics = [1]
 NumMasses = 2
-@variables t ω δ α β γ c[1:2*length(harmonics)*NumMasses]
-# Use this once we make the functiosn array friendly
-# if NumMasses == 1
-#     @variables t ω δ α β γ c[1:2*length(harmonics)*NumMasses]
-# else
-#     @variables t ω δ[1:NumMasses] α[1:NumMasses] β[1:NumMasses] γ m[1:NumMasses] c[1:2*length(harmonics)*NumMasses]
-# end
+nx = 3
+A = create_diff_matrix(nx)
+print(A)
+@variables t ω F[1:nx]
+
+# Explicitly define forcing terms without broadcasting
+f = [F[i] * sin(ω*t) for i in 1:nx]
+n = nx
 D = Differential(t)
-ansatz, c = ansatz_definer(t, ω, harmonics, NumMasses)
+ansatz, c = ansatz_definer(t, ω, harmonics, n)
+println("Size of c " * string(size(c)))
 println(ansatz)
 
-duffing_eq = [
-    D(D(ansatz[1])) ~ -δ*D(ansatz[1]) - α*ansatz[1] - β*(ansatz[1])^3 + δ*(D(ansatz[2])-D(ansatz[1])) + α*(ansatz[2]-ansatz[1]) + β*(ansatz[2]-ansatz[1])^3,
-    D(D(ansatz[2])) ~ γ*cos(ω*t) - δ*(D(ansatz[2])-D(ansatz[1])) - α*(ansatz[2]-ansatz[1]) - β*(ansatz[2] - ansatz[1])^3
-]
-println(duffing_eq)
-ansatz_powers, ansatz_derivatives = power_derivatives(t, ansatz, [2, 3], [1, 2])
-println("The result for ansatz 1 are:")
-println("Power of 2")
-println(ansatz_powers[1][1])
-println("Power of 3")
-println(ansatz_powers[1][2])
-println("First derivative")
-println(ansatz_derivatives[1][1])
-println("Second derivative")
-println(ansatz_derivatives[1][2])
+# Time derivatives of the ansatz
+du = [Symbolics.derivative(u,t) for u in ansatz]
+println(du)
 
-println("The result for ansatz 2 are:")
-println("Power of 2")
-println(ansatz_powers[2][1])
-println("Power of 3")
-println(ansatz_powers[2][2])
-println("First derivative")
-println(ansatz_derivatives[2][1])
-println("Second derivative")
-println(ansatz_derivatives[2][2])
+ansatz_powers, ansatz_derivatives = power_derivatives(t, ansatz, [2, 3], [1, 2])
+println("ansatz powers and derivatives done")
+
+# Discretized PDE: du/dt = A*u + f
+ode_system = Equation[]
+for i in 1:nx
+    lhs = du[i]
+    rhs = sum(A[i,j] * ansatz[j] for j in 1:nx) + f[i]
+    push!(ode_system, lhs ~ rhs)
+end
+println(ode_system)
 
 println("The harmonic balance substitution is:")
-harmonic_equations = harmonic_balance_substitution(ansatz, duffing_eq, ansatz_powers, ansatz_derivatives, harmonics, 1)
+harmonic_equations = harmonic_balance_substitution(ansatz, ode_system, ansatz_powers, ansatz_derivatives, harmonics, 1)
 println("Output of harmonic balance substitution:")
 println(harmonic_equations)
 
@@ -701,4 +710,3 @@ function solve_polynomial_system(n, input_alpha, input_beta, input_gamma, input_
 end
 
 println("The results are:")
-println(solve_polynomial_system(2*length(harmonics)*NumMasses,[1], [0.37], [1], [0.1], [1], input_funcs))
