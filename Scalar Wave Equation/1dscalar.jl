@@ -11,7 +11,8 @@ using SymbolicUtils:
     add_with_div,
     frac_maketerm,
     @compactified,
-    issym
+    issym,
+    simplify
 
 using Symbolics:
     Symbolics,
@@ -29,6 +30,7 @@ using Symbolics:
     expand,
     operation
 
+using Plots
 using OrderedCollections: OrderedDict
 using LinearAlgebra: LinearAlgebra
 using SymbolicUtils
@@ -590,22 +592,29 @@ end
 #Example usage
 harmonics = [1]
 NumMasses = 2
-nx = 3
+nx = 100
+ωtest = 1.0
 A = create_diff_matrix(nx)
-print(A)
+#print(A)
 @variables t ω F[1:nx]
-F = [1, 1, 1]
+# F is just ones for now
+F = ones(nx)
 # Explicitly define forcing terms without broadcasting
 f = [F[i] * sin(ω*t) for i in 1:nx]
 n = nx
 D = Differential(t)
 ansatz, c = ansatz_definer(t, ω, harmonics, n)
 println("Size of c " * string(size(c)))
-println(ansatz)
+if nx < 4
+    println("The ansatz is:")
+    println(ansatz)
+end
 
 # Time derivatives of the ansatz
 du = [Symbolics.derivative(u,t) for u in ansatz]
-println(du)
+if nx < 4
+    println(du)
+end
 
 ansatz_powers, ansatz_derivatives = power_derivatives(t, ansatz, [2, 3], [1, 2])
 println("ansatz powers and derivatives done")
@@ -617,24 +626,24 @@ for i in 1:nx
     rhs = sum(A[i,j] * ansatz[j] for j in 1:nx) + f[i]
     push!(ode_system, lhs ~ rhs)
 end
-println(ode_system)
+#println(ode_system)
 
 println("The harmonic balance substitution is:")
 harmonic_equations = harmonic_balance_substitution(ansatz, ode_system, ansatz_powers, ansatz_derivatives, harmonics, 1)
 println("Output of harmonic balance substitution:")
-println(harmonic_equations)
+#println(harmonic_equations)
 
 # Perform harmonic separation and store coefficients in a list
 harmonic_coefficients = harmonic_separation_with_fourier(harmonic_equations, ω, t)
 # Display harmonic coefficients
-for (harmonic, coeff) in harmonic_coefficients
-    println("Harmonic: $harmonic, Coefficient: $coeff")
-end
-println(harmonic_coefficients)
+# for (harmonic, coeff) in harmonic_coefficients
+#     println("Harmonic: $harmonic, Coefficient: $coeff")
+# end
+#println(harmonic_coefficients)
 
 input_funcs = [coeff for (harmonic, coeff) in harmonic_coefficients]
 println("The input functions are:")
-println(input_funcs)
+#println(input_funcs)
 
 
 function solve_polynomial_system(n, input_alpha, input_beta, input_gamma, input_delta, input_omega, input_funcs, returnnonsingular=false)
@@ -774,15 +783,84 @@ function extract_matrix_from_equations(input_funcs, n)
 end
 
 println("The results are:")
-ω = 1.0
-H, b = extract_matrix_from_equations(input_funcs, 6)
+H, b = extract_matrix_from_equations(input_funcs, 2*length(harmonics)*nx)
 println("Matrix H:")
-display(H)
+#display(H)
 println("\nVector b:")
-display(b)
+#display(b)
 
 # Solve the system
 c_p = H \ (-b)
 
 println("\nSolved coefficients:")
-display(c_p)
+#display(c_p)
+
+"""
+Now because nx = 3, it means we discretized space into 3 points. The behavior of the PDE at each point we assume is given by the ansatz. If harmonics = [1],
+then we are only considering the first harmonic. This means that the ansatz will have 2 terms for each point. This is why we have 6 coefficients in the system
+and 6 equations, one for each coefficient. c_p is the solution to the system of equations and it gives us the coefficients for the ansatz.
+So right now, the first 2 values of c_p are the coefficients for the first point (sine and cosine), the next 2 values are for the second point and the last 2 values are for the third point.
+Because we have these coefficients, we can now substitute them back into the ansatz to get the solution to the PDE at each point. And then we can plot the solution with this grid.
+"""
+
+# Create substitution dictionary for coefficients c using c_p 
+substitution_dict = Dict{Any,Any}()
+for i in 1:length(c)
+    substitution_dict[c[i]] = Num(c_p[i])
+end
+
+#Set value of ω
+substitution_dict[ω] = Num(ωtest)
+
+# Substitute the coefficients back into the ansatz for each spatial point
+u_points = [Symbolics.substitute(u, substitution_dict) for u in ansatz]
+
+# Evaluate and print u(x,t) at each spatial grid point: x = 2π*k/(nx-1), for k = 0 to nx-1
+# println("Substituted ansatz solutions for u(x,t):")
+# for k in 0:(nx - 1)
+#     x = 2π * k/(nx - 1)
+#     println("u(x=$(x), t) = ", u_points[k+1])
+# end
+
+"""
+So in the case of 3 spatial points, these are the solutions to the PDE at each point. We can now plot these solutions to see how the PDE behaves at each point.
+u(x=0.0, t) = -0.9480228105904878cos(t) + 0.3265823128063383sin(t)
+u(x=3.141592653589793, t) = -0.9972983717810876cos(t) - 0.016974830730531663sin(t)
+u(x=6.283185307179586, t) = -1.0546788176284247cos(t) + 0.3096074820758066sin(t)
+"""
+
+# Plot the solutions
+# Evaluate u(x,t) at each spatial grid point for time values in t_values
+x_values = [2π * k/(nx - 1) for k in 0:(nx - 1)]
+t_values = collect(0:0.1:10)
+
+# u_values is a matrix with dimensions (nx, length(t_values))
+u_values = [Symbolics.substitute(u, t => t_val) for u in u_points, t_val in t_values]
+# println(size(u_values))
+# println(typeof(u_values[1][1]))
+# println(u_values)
+
+# Convert the symbolic expressions to numerical values
+# Adjust conversion as needed; here we use Symbolics.evaluate to obtain a Float64
+u_numeric = [Float64(Symbolics.unwrap(expr)) for expr in u_values]
+print("okay")
+# println(u_numeric)
+# println(size(u_numeric))
+# The contour function expects the z matrix arranged with rows matching the t_values.
+# Create the contour plot
+p = contour(t_values, x_values, u_numeric, xlabel="Time", ylabel="Space", title="Contour plot of u(x,t)")
+
+# Save the plot
+savefig(p, "C:/Python Code/sediment-transport/Scalar Wave Equation/1Dscalarcontour.png")
+
+# Create an animated plot: space on x-axis, u on y-axis, time evolves
+anim = @animate for t0 in t_values
+    # For each time t0, evaluate u at each spatial point
+    u_at_t = [Float64(Symbolics.unwrap(Symbolics.substitute(u, t => t0))) for u in u_points]
+    plot(x_values, u_at_t,
+         xlabel="Space", ylabel="u(x,t)",
+         title="Time: $(round(t0, digits=2))",
+         legend=false, ylim=(-15,15))
+end
+
+gif(anim, "C:/Python Code/sediment-transport/Scalar Wave Equation/1Dscalarsolution.gif", fps=15)
