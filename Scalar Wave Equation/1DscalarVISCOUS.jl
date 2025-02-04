@@ -944,3 +944,27 @@ anim = @animate for t0 in t_values
 end
 
 gif(anim, "C:/Python Code/sediment-transport/Scalar Wave Equation/Viscous1Dscalarsolution.gif", fps=30)
+
+function plot_amplitude_vs_frequency(point_index::Int, c_p, harmonics, ω)
+    n_points = length(c_p) ÷ (2 * length(harmonics))
+    if point_index < 1 || point_index > n_points
+        error("Invalid point_index: $point_index. Must be between 1 and $n_points")
+    end
+    num_harmonics = length(harmonics)
+    offset = (point_index - 1) * 2 * num_harmonics
+    freq = Float64[]
+    amplitudes = Float64[]
+    for (i, h) in enumerate(harmonics)
+        c_sin = c_p[offset + 2*i - 1]
+        c_cos = c_p[offset + 2*i]
+        amp = sqrt(c_sin^2 + c_cos^2)
+        push!(amplitudes, amp)
+        push!(freq, h * ω)
+    end
+    bar(freq, amplitudes, bar_width=0.01, xlabel="Frequency", ylabel="Amplitude", 
+        title="Amplitude vs Frequency at spatial point $(point_index)", legend=false, xlims=(0,5*ω))
+end
+
+# Example usage:
+# Assuming c_p is already solved and defined, harmonics as defined, and ωtest is set:
+plot_amplitude_vs_frequency(500, c_p, harmonics, ωtest)
