@@ -623,14 +623,46 @@ function create_diff_matrix(nx, L=2π; disc, bc)
     return A
 end
 
+"""
+The root issue is that even when using central (or downwind) differences 
+the advection‐equation (a hyperbolic PDE) has little numerical diffusion 
+so that high–frequency (or aliasing) errors appear as spurious 
+discontinuities (here near π/2). One common fix is to add a small amount 
+of artificial viscosity that damps those oscillations.
+"""
+
+function create_dd2_matrix(nx, L=2π; disc=:central, bc=:periodic)
+    dx = L/(nx-1)
+    D2 = zeros(nx, nx)
+    if disc == :central
+        for i in 2:nx-1
+            D2[i,i-1] = 1/(dx^2)
+            D2[i,i]   = -2/(dx^2)
+            D2[i,i+1] = 1/(dx^2)
+        end
+    end
+    if bc == :periodic
+        D2[1,end]   = 1/(dx^2)
+        D2[1,1]     = -2/(dx^2)
+        D2[1,2]     = 1/(dx^2)
+        D2[end,end-1] = 1/(dx^2)
+        D2[end,end]   = -2/(dx^2)
+        D2[end,1]     = 1/(dx^2)
+    end
+    return D2
+end
+
 #Example usage
 harmonics = [1, 3]
-nx = 100
+nx = 1000
 ωtest = 1.0
-disc = :downwind
-bc = :downwind
+disc = :central
+bc = :periodic
 A = create_diff_matrix(nx, disc=disc ,bc=bc)
 #print(A)
+dx = 2π/(nx-1)
+ν = dx/10
+B = create_dd2_matrix(nx, 2π; disc=:central, bc=:periodic)
 @variables t ω F[1:nx]
 # F is just ones for now
 F = ones(nx)
@@ -654,11 +686,16 @@ end
 ansatz_powers, ansatz_derivatives = power_derivatives(t, ansatz, [2, 3], [1, 2])
 println("ansatz powers and derivatives done")
 
+"""
+This modification adds a small dissipative term that damps out the high–frequency aliasing responsible for the discontinuity at some points. 
+Adjust ν until the spurious jump is removed without overly damping the true advection.
+"""
+
 # Discretized PDE: du/dt = A*u + f
 ode_system = Equation[]
 for i in 1:nx
     lhs = du[i]
-    rhs = sum(A[i,j] * ansatz[j] for j in 1:nx) + f[i]
+    rhs = sum(A[i,j]*ansatz[j] for j in 1:nx) + ν*sum(B[i,j]*ansatz[j] for j in 1:nx) + f[i]
     push!(ode_system, lhs ~ rhs)
 end
 #println(ode_system)
@@ -887,7 +924,7 @@ print("okay")
 p = contour(t_values, x_values, u_numeric, xlabel="Time", ylabel="Space", title="Contour plot of u(x,t), nx = $nx, $disc", fill=true)
 umax = maximum(u_numeric)
 # Save the plot
-savefig(p, "C:/Python Code/sediment-transport/Scalar Wave Equation/1Dscalarcontour.png")
+savefig(p, "C:/Python Code/sediment-transport/Scalar Wave Equation/Viscous1Dscalarcontour.png")
 
 # Create an animated plot: space on x-axis, u on y-axis, time evolves
 anim = @animate for t0 in t_values
@@ -899,4 +936,4 @@ anim = @animate for t0 in t_values
          legend=false, ylim=(-umax*1.25,umax*1.25))
 end
 
-gif(anim, "C:/Python Code/sediment-transport/Scalar Wave Equation/1Dscalarsolution.gif", fps=30)
+gif(anim, "C:/Python Code/sediment-transport/Scalar Wave Equation/Viscous1Dscalarsolution.gif", fps=30)
