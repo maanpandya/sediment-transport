@@ -11,8 +11,8 @@ function rayleigh(du, u, p, t)
 end
 
 # Setting parameters
-ε = 0.1
-γ = 1.0
+ε = 0.8
+γ = 2.0
 ω = 1.0
 p = [ε, γ, ω]
 
@@ -97,3 +97,5 @@ p1 = plot(fvec, 2.0/Nsamples * abs.(fsampled[1:length(fvec)]),
 # show the plot
 plot(p1)
 
+# save the plot
+savefig("rayleigh_fft_time.png")
