@@ -619,6 +619,9 @@ function create_diff_matrix(nx, L=2π; disc, bc)
         A[1, 2] = 1/dx
         A[end, end] = -1/dx
         A[end, 1] = 1/dx
+    elseif bc == :dirichlet
+        A[1, 1] = 0
+        A[end, end] = 0
     end
     return A
 end
@@ -648,6 +651,9 @@ function create_dd2_matrix(nx, L=2π; disc=:central, bc=:periodic)
         D2[end,end-1] = 1/(dx^2)
         D2[end,end]   = -2/(dx^2)
         D2[end,1]     = 1/(dx^2)
+    elseif bc == :dirichlet
+        D2[1,1] = 0
+        D2[end,end] = 0
     end
     return D2
 end
@@ -655,14 +661,15 @@ end
 #Example usage
 harmonics = [1, 3]
 nx = 1000
-ωtest = 1.0
+ωtest = 1
 disc = :central
 bc = :periodic
-A = create_diff_matrix(nx, disc=disc ,bc=bc)
+L = 2π
+A = create_diff_matrix(nx, L, disc=disc ,bc=bc)
 #print(A)
 dx = 2π/(nx-1)
 ν = dx/10
-B = create_dd2_matrix(nx, 2π; disc=:central, bc=:periodic)
+B = create_dd2_matrix(nx, L, disc=:central, bc=:bc)
 @variables t ω F[1:nx]
 # F is just ones for now
 F = ones(nx)
@@ -903,7 +910,7 @@ u(x=6.283185307179586, t) = -1.0546788176284247cos(t) + 0.3096074820758066sin(t)
 
 # Plot the solutions
 # Evaluate u(x,t) at each spatial grid point for time values in t_values
-x_values = [2π * k/(nx - 1) for k in 0:(nx - 1)]
+x_values = [L * k/(nx - 1) for k in 0:(nx - 1)]
 step = 0.1
 t_values = collect(0:step:10)
 
@@ -937,3 +944,27 @@ anim = @animate for t0 in t_values
 end
 
 gif(anim, "C:/Python Code/sediment-transport/Scalar Wave Equation/Viscous1Dscalarsolution.gif", fps=30)
+
+function plot_amplitude_vs_frequency(point_index::Int, c_p, harmonics, ω)
+    n_points = length(c_p) ÷ (2 * length(harmonics))
+    if point_index < 1 || point_index > n_points
+        error("Invalid point_index: $point_index. Must be between 1 and $n_points")
+    end
+    num_harmonics = length(harmonics)
+    offset = (point_index - 1) * 2 * num_harmonics
+    freq = Float64[]
+    amplitudes = Float64[]
+    for (i, h) in enumerate(harmonics)
+        c_sin = c_p[offset + 2*i - 1]
+        c_cos = c_p[offset + 2*i]
+        amp = sqrt(c_sin^2 + c_cos^2)
+        push!(amplitudes, amp)
+        push!(freq, h * ω)
+    end
+    bar(freq, amplitudes, bar_width=0.01, xlabel="Frequency", ylabel="Amplitude", 
+        title="Amplitude vs Frequency at spatial point $(point_index)", legend=false, xlims=(0,5*ω))
+end
+
+# Example usage:
+# Assuming c_p is already solved and defined, harmonics as defined, and ωtest is set:
+plot_amplitude_vs_frequency(500, c_p, harmonics, ωtest)
