@@ -548,13 +548,20 @@ function harmonic_balance_substitution(ansatz, ode, ansatz_powers, ansatz_deriva
 end
 
 
-function harmonic_separation_with_fourier(equations, ω, t)
-    harmonics = [
-        (sin, ω, t),
-        (cos, ω, t)#,
-        # (sin, 3*ω, t),
-        # (cos, 3*ω, t)
-    ]
+function harmonic_separation_with_fourier(equations, ω, t, length_harmonics)
+    if length_harmonics == 1
+        harmonics = [
+            (sin, ω, t),
+            (cos, ω, t)
+        ]
+    elseif length_harmonics == 2
+        harmonics = [
+            (sin, ω, t),
+            (cos, ω, t),
+            (sin, 3*ω, t),
+            (cos, 3*ω, t)
+        ]
+    end
 
     # Initialize an empty list to store harmonic coefficients
     harmonic_coefficients = []
@@ -572,12 +579,24 @@ function harmonic_separation_with_fourier(equations, ω, t)
     return harmonic_coefficients
 end
 
-function create_diff_matrix(nx, L=2π; bc=:periodic)
+function create_diff_matrix(nx, L=2π; disc, bc)
     dx = L / (nx - 1)
     A = zeros(nx, nx)
-    for i in 2:nx-1
-        A[i, i-1] = -1/(2dx)
-        A[i, i+1] = 1/(2dx)
+    if disc == :central
+        for i in 2:nx-1
+            A[i, i-1] = -1/(2dx)
+            A[i, i+1] = 1/(2dx)
+        end
+    elseif disc == :upwind
+        for i in 2:nx-1
+            A[i, i-1] = -1/dx
+            A[i, i] = 1/dx
+        end
+    elseif disc == :downwind
+        for i in 2:nx-1
+            A[i, i] = -1/dx
+            A[i, i+1] = 1/dx
+        end
     end
     # Periodic boundary conditions
     if bc == :periodic
@@ -585,16 +604,30 @@ function create_diff_matrix(nx, L=2π; bc=:periodic)
         A[1, 2] = 1/(2dx)
         A[end, end-1] = -1/(2dx)
         A[end, 1] = 1/(2dx)
+    elseif bc == :nonperiodic
+        A[1, 1] = -1/dx
+        A[1, 2] = 1/dx
+        A[end, end-1] = -1/dx
+        A[end, end] = 1/dx
+    elseif bc == :upwind
+        A[1, end] = -1/dx
+        A[1, 1] = 1/dx
+        A[end, end-1] = -1/dx
+        A[end, end] = 1/dx
+    elseif bc == :downwind
+        A[1, 1] = -1/dx
+        A[1, 2] = 1/dx
+        A[end, end] = -1/dx
+        A[end, 1] = 1/dx
     end
     return A
 end
 
 #Example usage
-harmonics = [1]
-NumMasses = 2
+harmonics = [1, 3]
 nx = 100
 ωtest = 1.0
-A = create_diff_matrix(nx)
+A = create_diff_matrix(nx, disc=:downwind ,bc=:downwind)
 #print(A)
 @variables t ω F[1:nx]
 # F is just ones for now
@@ -634,7 +667,7 @@ println("Output of harmonic balance substitution:")
 #println(harmonic_equations)
 
 # Perform harmonic separation and store coefficients in a list
-harmonic_coefficients = harmonic_separation_with_fourier(harmonic_equations, ω, t)
+harmonic_coefficients = harmonic_separation_with_fourier(harmonic_equations, ω, t, length(harmonics))
 # Display harmonic coefficients
 # for (harmonic, coeff) in harmonic_coefficients
 #     println("Harmonic: $harmonic, Coefficient: $coeff")
@@ -832,7 +865,8 @@ u(x=6.283185307179586, t) = -1.0546788176284247cos(t) + 0.3096074820758066sin(t)
 # Plot the solutions
 # Evaluate u(x,t) at each spatial grid point for time values in t_values
 x_values = [2π * k/(nx - 1) for k in 0:(nx - 1)]
-t_values = collect(0:0.1:10)
+step = 0.1
+t_values = collect(0:step:10)
 
 # u_values is a matrix with dimensions (nx, length(t_values))
 u_values = [Symbolics.substitute(u, t => t_val) for u in u_points, t_val in t_values]
@@ -849,7 +883,7 @@ print("okay")
 # The contour function expects the z matrix arranged with rows matching the t_values.
 # Create the contour plot
 p = contour(t_values, x_values, u_numeric, xlabel="Time", ylabel="Space", title="Contour plot of u(x,t)")
-
+umax = maximum(u_numeric)
 # Save the plot
 savefig(p, "C:/Python Code/sediment-transport/Scalar Wave Equation/1Dscalarcontour.png")
 
@@ -860,7 +894,7 @@ anim = @animate for t0 in t_values
     plot(x_values, u_at_t,
          xlabel="Space", ylabel="u(x,t)",
          title="Time: $(round(t0, digits=2))",
-         legend=false, ylim=(-15,15))
+         legend=false, ylim=(-umax*1.25,umax*1.25))
 end
 
-gif(anim, "C:/Python Code/sediment-transport/Scalar Wave Equation/1Dscalarsolution.gif", fps=15)
+gif(anim, "C:/Python Code/sediment-transport/Scalar Wave Equation/1Dscalarsolution.gif", fps=30)
